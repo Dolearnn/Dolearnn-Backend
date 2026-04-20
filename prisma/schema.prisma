@@ -1,0 +1,370 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PARENT
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+  BOTH
+}
+
+enum AccountStatus {
+  ACTIVE
+  DEACTIVATED
+  TERMINATED
+}
+
+enum GradeLevel {
+  PRIMARY
+  JSS
+  SSS
+  COLLEGE_YEAR_1
+  COLLEGE_YEAR_2
+  COLLEGE_YEAR_3
+  COLLEGE_YEAR_4
+  OTHER
+}
+
+enum LearningGoal {
+  EXAM_PREP
+  CATCH_UP_WITH_SCHOOL
+  LEARN_A_NEW_SKILL
+  GENERAL_IMPROVEMENT
+}
+
+enum CurrentLevel {
+  STRUGGLING
+  AVERAGE
+  ABOVE_AVERAGE
+}
+
+enum GenderPreference {
+  NO_PREFERENCE
+  MALE
+  FEMALE
+}
+
+enum TimeBlock {
+  MORNING
+  AFTERNOON
+  EVENING
+}
+
+enum DayOfWeek {
+  MON
+  TUE
+  WED
+  THU
+  FRI
+  SAT
+  SUN
+}
+
+enum SessionStatus {
+  UPCOMING
+  COMPLETED
+  CANCELLED
+}
+
+enum ProposalStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+enum CancellationRequester {
+  FAMILY
+  TEACHER
+}
+
+enum CancellationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum Performance {
+  EXCELLENT
+  GOOD
+  NEEDS_WORK
+}
+
+enum PaymentPlan {
+  SINGLE_SESSION
+  STARTER_BUNDLE
+}
+
+enum PaymentGateway {
+  STRIPE
+  FLUTTERWAVE
+}
+
+enum PayoutStatus {
+  PENDING
+  PAID
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String?
+  googleId     String?       @unique
+  authProvider AuthProvider  @default(EMAIL)
+  name         String
+  role         Role
+  status       AccountStatus @default(ACTIVE)
+  mustChangePassword Boolean @default(false)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  parentProfile  ParentProfile?
+  teacherProfile TeacherProfile?
+  notifications  Notification[]
+}
+
+model ParentProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  whatsapp  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  students Student[]
+  payments Payment[]
+}
+
+model TeacherProfile {
+  id                String        @id @default(cuid())
+  userId            String        @unique
+  firstName         String
+  lastName          String
+  phoneCountry      String?
+  phoneNumber       String?
+  bio               String?
+  subjects          String[]
+  qualifications    String[]
+  hourlyRate        Decimal       @default(0) @db.Decimal(10, 2)
+  rating            Decimal       @default(0) @db.Decimal(3, 2)
+  totalSessions     Int           @default(0)
+  status            AccountStatus @default(ACTIVE)
+  terminationReason String?
+  terminatedAt      DateTime?
+  joinedAt          DateTime      @default(now())
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedStudents Student[]         @relation("AssignedTeacher")
+  sessions         Session[]
+  proposals        SessionProposal[]
+  notes            SessionNote[]
+  payouts          TeacherPayout[]
+  notifications    Notification[]    @relation("TeacherNotifications")
+}
+
+model Student {
+  id                 String        @id @default(cuid())
+  parentId           String
+  assignedTeacherId  String?
+  fullName           String
+  age                Int
+  grade              GradeLevel
+  gradeOther         String?
+  school             String?
+  status             AccountStatus @default(ACTIVE)
+  deactivationReason String?
+  deactivatedAt      DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  parent          ParentProfile     @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  assignedTeacher TeacherProfile?   @relation("AssignedTeacher", fields: [assignedTeacherId], references: [id], onDelete: SetNull)
+  intake          Intake?
+  goals           Goal[]
+  sessions        Session[]
+  proposals       SessionProposal[]
+  notifications   Notification[]
+}
+
+model Intake {
+  id                String           @id @default(cuid())
+  studentId         String           @unique
+  subject           String
+  subjects          String[]
+  subjectOther      String?
+  learningGoal      LearningGoal
+  currentLevel      CurrentLevel
+  specificTopics    String?
+  teacherGenderPref GenderPreference
+  specialNotes      String?
+  timezone          String           @default("UTC")
+  sessionsPerWeek   String
+  budget            String
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  student  Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  schedule IntakeSchedule[]
+}
+
+model IntakeSchedule {
+  id       String    @id @default(cuid())
+  intakeId String
+  day      DayOfWeek
+  time     TimeBlock
+
+  intake Intake @relation(fields: [intakeId], references: [id], onDelete: Cascade)
+
+  @@unique([intakeId, day])
+}
+
+model Goal {
+  id         String    @id @default(cuid())
+  studentId  String
+  title      String
+  targetDate DateTime?
+  progress   Int       @default(0)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model SessionProposal {
+  id           String         @id @default(cuid())
+  studentId    String
+  teacherId    String
+  subject      String
+  startsAt     DateTime
+  durationMins Int
+  timeBlock    TimeBlock
+  note         String?
+  status       ProposalStatus @default(PENDING)
+  createdAt    DateTime       @default(now())
+  resolvedAt   DateTime?
+
+  student Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacher TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  session Session?
+}
+
+model Session {
+  id           String        @id @default(cuid())
+  studentId    String
+  teacherId    String
+  proposalId   String?       @unique
+  subject      String
+  startsAt     DateTime
+  durationMins Int
+  meetLink     String?
+  status       SessionStatus @default(UPCOMING)
+  amount       Decimal       @default(0) @db.Decimal(10, 2)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  student      Student              @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacher      TeacherProfile       @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  proposal     SessionProposal?     @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+  attendance   Attendance?
+  note         SessionNote?
+  cancellations CancellationRequest[]
+}
+
+model Attendance {
+  id                String    @id @default(cuid())
+  sessionId         String    @unique
+  teacherConfirmedAt DateTime?
+  familyConfirmedAt  DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model CancellationRequest {
+  id          String                @id @default(cuid())
+  sessionId   String
+  requestedBy CancellationRequester
+  reason      String
+  status      CancellationStatus    @default(PENDING)
+  requestedAt DateTime              @default(now())
+  resolvedAt  DateTime?
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model SessionNote {
+  id          String      @id @default(cuid())
+  sessionId   String      @unique
+  teacherId   String
+  covered     String
+  performance Performance
+  rating      Int
+  focusNext   String
+  concerns    String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  session Session        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  teacher TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id               String         @id @default(cuid())
+  parentId         String
+  plan             PaymentPlan
+  amount           Decimal        @db.Decimal(10, 2)
+  gateway          PaymentGateway
+  sessionsIncluded Int
+  sessionsUsed     Int            @default(0)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  parent ParentProfile @relation(fields: [parentId], references: [id], onDelete: Cascade)
+}
+
+model TeacherPayout {
+  id        String       @id @default(cuid())
+  teacherId String
+  month     String
+  amount    Decimal      @db.Decimal(10, 2)
+  status    PayoutStatus @default(PENDING)
+  paidAt    DateTime?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  teacher TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherId, month])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  role      Role
+  title     String
+  body      String
+  read      Boolean  @default(false)
+  studentId String?
+  teacherId String?
+  createdAt DateTime @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  student Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  teacher TeacherProfile? @relation("TeacherNotifications", fields: [teacherId], references: [id], onDelete: SetNull)
+
+  @@index([userId, read, createdAt])
+}
