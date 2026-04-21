@@ -2,9 +2,11 @@ import {
   AccountStatus,
   CancellationRequester,
   CancellationStatus,
+  DayOfWeek,
   ProposalStatus,
   Role,
   SessionStatus,
+  TimeBlock,
 } from '@prisma/client';
 import { AppError } from '../../lib/http';
 import { prisma } from '../../lib/prisma';
@@ -15,8 +17,11 @@ import {
 import type {
   CreateStudentInput,
   DeactivateStudentInput,
+  DeclineSessionProposalInput,
   RequestCancellationInput,
+  SaveGoalInput,
   SaveIntakeInput,
+  UpdateStudentInput,
 } from './family.schemas';
 
 function assertParent(role: Role) {
@@ -71,6 +76,16 @@ const studentInclude = {
       user: true,
     },
   },
+  subjectAssignments: {
+    include: {
+      teacher: {
+        include: {
+          user: true,
+        },
+      },
+    },
+    orderBy: { createdAt: 'asc' as const },
+  },
 };
 
 const sessionInclude = {
@@ -84,6 +99,39 @@ const sessionInclude = {
     orderBy: { requestedAt: 'desc' as const },
   },
 };
+
+const dayLabel: Record<DayOfWeek, string> = {
+  [DayOfWeek.MON]: 'Monday',
+  [DayOfWeek.TUE]: 'Tuesday',
+  [DayOfWeek.WED]: 'Wednesday',
+  [DayOfWeek.THU]: 'Thursday',
+  [DayOfWeek.FRI]: 'Friday',
+  [DayOfWeek.SAT]: 'Saturday',
+  [DayOfWeek.SUN]: 'Sunday',
+};
+
+const timeLabel: Record<TimeBlock, string> = {
+  [TimeBlock.MORNING]: 'Morning',
+  [TimeBlock.AFTERNOON]: 'Afternoon',
+  [TimeBlock.EVENING]: 'Evening',
+};
+
+const timeBlockRanges: Record<TimeBlock, { start: number; end: number }> = {
+  [TimeBlock.MORNING]: { start: 6 * 60, end: 12 * 60 },
+  [TimeBlock.AFTERNOON]: { start: 12 * 60, end: 17 * 60 },
+  [TimeBlock.EVENING]: { start: 17 * 60, end: 22 * 60 },
+};
+
+function timeToMinutes(time: string) {
+  const [hours, minutes] = time.split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
+function exactTimeIsInsideBlock(time: string, block: TimeBlock) {
+  const minutes = timeToMinutes(time);
+  const range = timeBlockRanges[block];
+  return minutes >= range.start && minutes < range.end;
+}
 
 export async function familyProfile(userId: string, role: Role) {
   assertParent(role);
@@ -139,6 +187,28 @@ export async function createStudent(
   });
 }
 
+export async function updateStudent(
+  userId: string,
+  role: Role,
+  studentId: string,
+  input: UpdateStudentInput,
+) {
+  assertParent(role);
+  await getOwnedStudent(userId, studentId);
+
+  return prisma.student.update({
+    where: { id: studentId },
+    data: {
+      fullName: input.fullName.trim(),
+      age: input.age,
+      grade: input.grade,
+      gradeOther: input.grade === 'OTHER' ? input.gradeOther?.trim() || null : null,
+      school: input.school?.trim() || null,
+    },
+    include: studentInclude,
+  });
+}
+
 export async function saveStudentIntake(
   userId: string,
   role: Role,
@@ -188,6 +258,42 @@ export async function saveStudentIntake(
       schedule: {
         orderBy: { day: 'asc' },
       },
+    },
+  });
+}
+
+export async function saveStudentGoal(
+  userId: string,
+  role: Role,
+  studentId: string,
+  input: SaveGoalInput,
+) {
+  assertParent(role);
+  await getOwnedStudent(userId, studentId);
+
+  const existingGoal = await prisma.goal.findFirst({
+    where: { studentId },
+    orderBy: { createdAt: 'asc' },
+  });
+  const targetDate = input.targetDate ? new Date(input.targetDate) : null;
+
+  if (existingGoal) {
+    return prisma.goal.update({
+      where: { id: existingGoal.id },
+      data: {
+        title: input.title.trim(),
+        targetDate,
+        progress: input.progress ?? existingGoal.progress,
+      },
+    });
+  }
+
+  return prisma.goal.create({
+    data: {
+      studentId,
+      title: input.title.trim(),
+      targetDate,
+      progress: input.progress ?? 0,
     },
   });
 }
@@ -462,6 +568,30 @@ async function getOwnedProposal(userId: string, proposalId: string) {
   return proposal;
 }
 
+async function assertPreferredAlternativeIsSavedAvailability(
+  studentId: string,
+  preferredAlternative?: DeclineSessionProposalInput['preferredAlternative'],
+) {
+  if (!preferredAlternative) return;
+
+  const saved = await prisma.intakeSchedule.findFirst({
+    where: {
+      day: preferredAlternative.day,
+      time: preferredAlternative.time,
+      intake: {
+        studentId,
+      },
+    },
+  });
+
+  if (!saved) {
+    throw new AppError(
+      400,
+      'Preferred alternative must be inside the saved student availability',
+    );
+  }
+}
+
 export async function acceptSessionProposal(
   userId: string,
   role: Role,
@@ -498,6 +628,16 @@ export async function acceptSessionProposal(
       },
     });
 
+    await createAdminNotifications(
+      {
+        title: 'Meeting link needed',
+        body: `${proposal.student.fullName}'s ${proposal.subject} session was accepted. Add the class meeting link for ${proposal.teacher.user.name}.`,
+        studentId: proposal.studentId,
+        teacherId: proposal.teacherId,
+      },
+      tx,
+    );
+
     await createNotification(
       {
         userId: proposal.teacher.userId,
@@ -521,6 +661,7 @@ export async function declineSessionProposal(
   userId: string,
   role: Role,
   proposalId: string,
+  input: DeclineSessionProposalInput,
 ) {
   assertParent(role);
   const proposal = await getOwnedProposal(userId, proposalId);
@@ -529,11 +670,42 @@ export async function declineSessionProposal(
     throw new AppError(400, 'This proposal has already been resolved');
   }
 
+  await assertPreferredAlternativeIsSavedAvailability(
+    proposal.studentId,
+    input.preferredAlternative,
+  );
+
+  if (
+    input.preferredAlternativeExactTime &&
+    input.preferredAlternative &&
+    !exactTimeIsInsideBlock(
+      input.preferredAlternativeExactTime,
+      input.preferredAlternative.time,
+    )
+  ) {
+    throw new AppError(
+      400,
+      'Preferred exact time must be inside the selected session block',
+    );
+  }
+
   return prisma.$transaction(async (tx) => {
+    const alternativeText = input.preferredAlternative
+      ? ` Preferred alternative: ${dayLabel[input.preferredAlternative.day]} ${timeLabel[input.preferredAlternative.time]}${
+          input.preferredAlternativeExactTime
+            ? ` around ${input.preferredAlternativeExactTime}`
+            : ''
+        }.`
+      : '';
     const updatedProposal = await tx.sessionProposal.update({
       where: { id: proposal.id },
       data: {
         status: ProposalStatus.DECLINED,
+        declineReason: input.reason.trim(),
+        preferredAlternativeDay: input.preferredAlternative?.day,
+        preferredAlternativeTime: input.preferredAlternative?.time,
+        preferredAlternativeExactTime:
+          input.preferredAlternativeExactTime ?? null,
         resolvedAt: new Date(),
       },
       include: {
@@ -549,7 +721,17 @@ export async function declineSessionProposal(
         userId: proposal.teacher.userId,
         role: Role.TEACHER,
         title: 'Session proposal declined',
-        body: `${proposal.student.fullName}'s family declined your ${proposal.subject} session proposal.`,
+        body: `${proposal.student.fullName}'s family declined your ${proposal.subject} session proposal. Reason: ${input.reason.trim()}.${alternativeText}`,
+        studentId: proposal.studentId,
+        teacherId: proposal.teacherId,
+      },
+      tx,
+    );
+
+    await createAdminNotifications(
+      {
+        title: 'Session proposal declined',
+        body: `${proposal.student.fullName}'s family declined ${proposal.subject} with ${proposal.teacher.user.name}. Reason: ${input.reason.trim()}.${alternativeText}`,
         studentId: proposal.studentId,
         teacherId: proposal.teacherId,
       },

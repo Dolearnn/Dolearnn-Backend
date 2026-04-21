@@ -156,6 +156,9 @@ model TeacherProfile {
   bio               String?
   subjects          String[]
   qualifications    String[]
+  bankName          String?
+  accountName       String?
+  accountNumber     String?
   hourlyRate        Decimal       @default(0) @db.Decimal(10, 2)
   rating            Decimal       @default(0) @db.Decimal(3, 2)
   totalSessions     Int           @default(0)
@@ -168,6 +171,7 @@ model TeacherProfile {
 
   user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   assignedStudents Student[]         @relation("AssignedTeacher")
+  subjectAssignments StudentSubjectAssignment[]
   sessions         Session[]
   proposals        SessionProposal[]
   notes            SessionNote[]
@@ -192,11 +196,27 @@ model Student {
 
   parent          ParentProfile     @relation(fields: [parentId], references: [id], onDelete: Cascade)
   assignedTeacher TeacherProfile?   @relation("AssignedTeacher", fields: [assignedTeacherId], references: [id], onDelete: SetNull)
+  subjectAssignments StudentSubjectAssignment[]
   intake          Intake?
   goals           Goal[]
   sessions        Session[]
   proposals       SessionProposal[]
   notifications   Notification[]
+}
+
+model StudentSubjectAssignment {
+  id        String   @id @default(cuid())
+  studentId String
+  teacherId String
+  subject   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacher TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, subject])
+  @@index([teacherId])
 }
 
 model Intake {
@@ -253,6 +273,10 @@ model SessionProposal {
   timeBlock    TimeBlock
   note         String?
   status       ProposalStatus @default(PENDING)
+  declineReason String?
+  preferredAlternativeDay DayOfWeek?
+  preferredAlternativeTime TimeBlock?
+  preferredAlternativeExactTime String?
   createdAt    DateTime       @default(now())
   resolvedAt   DateTime?
 

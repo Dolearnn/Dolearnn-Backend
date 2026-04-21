@@ -7,6 +7,7 @@ import {
   createSessionNoteSchema,
   createSessionProposalSchema,
   requestCancellationSchema,
+  updatePayoutAccountSchema,
 } from './teacher.schemas';
 import {
   confirmTeacherAttendance,
@@ -17,6 +18,7 @@ import {
   teacherProfile,
   teacherSessions,
   teacherStudents,
+  updateTeacherPayoutAccount,
 } from './teacher.service';
 
 export const teacherRoutes = Router();
@@ -59,6 +61,19 @@ teacherRoutes.get(
   asyncHandler(async (req, res) => {
     const payouts = await teacherPayouts(req.user!.id, req.user!.role);
     res.json({ payouts });
+  }),
+);
+
+teacherRoutes.patch(
+  '/payout-account',
+  asyncHandler(async (req, res) => {
+    const input = updatePayoutAccountSchema.parse(req.body);
+    const profile = await updateTeacherPayoutAccount(
+      req.user!.id,
+      req.user!.role,
+      input,
+    );
+    res.json({ profile });
   }),
 );
 

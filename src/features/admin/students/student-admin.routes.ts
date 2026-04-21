@@ -47,7 +47,8 @@ studentAdminRoutes.post(
   '/:studentId/unassign-teacher',
   asyncHandler(async (req, res) => {
     const studentId = getRouteParam(req.params.studentId, 'student id');
-    const student = await unassignTeacherFromStudent(studentId);
+    const input = assignTeacherSchema.pick({ subject: true }).parse(req.body ?? {});
+    const student = await unassignTeacherFromStudent(studentId, input.subject);
     res.json({ student });
   }),
 );

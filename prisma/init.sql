@@ -59,6 +59,7 @@ CREATE TABLE "User" (
     "name" TEXT NOT NULL,
     "role" "Role" NOT NULL,
     "status" "AccountStatus" NOT NULL DEFAULT 'ACTIVE',
+    "mustChangePassword" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -87,6 +88,9 @@ CREATE TABLE "TeacherProfile" (
     "bio" TEXT,
     "subjects" TEXT[],
     "qualifications" TEXT[],
+    "bankName" TEXT,
+    "accountName" TEXT,
+    "accountNumber" TEXT,
     "hourlyRate" DECIMAL(10,2) NOT NULL DEFAULT 0,
     "rating" DECIMAL(3,2) NOT NULL DEFAULT 0,
     "totalSessions" INTEGER NOT NULL DEFAULT 0,
@@ -174,6 +178,10 @@ CREATE TABLE "SessionProposal" (
     "timeBlock" "TimeBlock" NOT NULL,
     "note" TEXT,
     "status" "ProposalStatus" NOT NULL DEFAULT 'PENDING',
+    "declineReason" TEXT,
+    "preferredAlternativeDay" "DayOfWeek",
+    "preferredAlternativeTime" "TimeBlock",
+    "preferredAlternativeExactTime" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "resolvedAt" TIMESTAMP(3),
 

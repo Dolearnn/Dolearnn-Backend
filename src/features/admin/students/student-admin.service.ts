@@ -22,6 +22,16 @@ const studentInclude = {
       user: true,
     },
   },
+  subjectAssignments: {
+    include: {
+      teacher: {
+        include: {
+          user: true,
+        },
+      },
+    },
+    orderBy: { createdAt: 'asc' as const },
+  },
 };
 
 export async function listStudents() {
@@ -34,7 +44,6 @@ export async function listStudents() {
 export async function listPendingIntakes() {
   return prisma.student.findMany({
     where: {
-      assignedTeacherId: null,
       intake: {
         isNot: null,
       },
@@ -53,6 +62,7 @@ export async function assignTeacherToStudent(
       where: { id: studentId },
       include: {
         parent: { include: { user: true } },
+        intake: true,
       },
     }),
     prisma.teacherProfile.findUnique({
@@ -76,14 +86,74 @@ export async function assignTeacherToStudent(
     throw new AppError(400, 'Only active teachers can be assigned');
   }
 
+  const subject = input.subject?.trim();
+  const subjectsToAssign = subject
+    ? [subject]
+    : student.intake?.subjects?.length
+      ? student.intake.subjects
+      : student.intake?.subject
+        ? [student.intake.subject]
+        : [];
+
+  if (subjectsToAssign.length === 0) {
+    throw new AppError(400, 'Student has no subject to assign');
+  }
+
+  const unsupportedSubjects = subjectsToAssign.filter(
+    (item) =>
+      !teacher.subjects.some((teacherSubject) => {
+        const a = teacherSubject.toLowerCase();
+        const b = item.toLowerCase();
+        return a.includes(b) || b.includes(a);
+      }),
+  );
+
+  if (unsupportedSubjects.length > 0) {
+    throw new AppError(
+      400,
+      `${teacher.user.name} does not cover ${unsupportedSubjects.join(', ')}`,
+    );
+  }
+
   return prisma.$transaction(async (tx) => {
+    for (const assignmentSubject of subjectsToAssign) {
+      await tx.studentSubjectAssignment.upsert({
+        where: {
+          studentId_subject: {
+            studentId,
+            subject: assignmentSubject,
+          },
+        },
+        create: {
+          studentId,
+          teacherId: teacher.id,
+          subject: assignmentSubject,
+        },
+        update: {
+          teacherId: teacher.id,
+        },
+      });
+    }
+
+    const assignmentCount = await tx.studentSubjectAssignment.count({
+      where: { studentId },
+    });
+
     const updatedStudent = await tx.student.update({
       where: { id: studentId },
       data: {
-        assignedTeacherId: teacher.id,
+        assignedTeacherId:
+          assignmentCount === 0 || !student.assignedTeacherId
+            ? teacher.id
+            : student.assignedTeacherId,
       },
       include: studentInclude,
     });
+
+    const subjectText =
+      subjectsToAssign.length === 1
+        ? subjectsToAssign[0]
+        : subjectsToAssign.join(', ');
 
     await createNotifications(
       [
@@ -91,7 +161,7 @@ export async function assignTeacherToStudent(
           userId: student.parent.userId,
           role: Role.PARENT,
           title: 'Teacher assigned',
-          body: `${teacher.user.name} has been assigned to ${student.fullName}.`,
+          body: `${teacher.user.name} has been assigned to ${student.fullName} for ${subjectText}.`,
           studentId: student.id,
           teacherId: teacher.id,
         },
@@ -99,7 +169,7 @@ export async function assignTeacherToStudent(
           userId: teacher.userId,
           role: Role.TEACHER,
           title: 'New student assigned',
-          body: `You have been assigned to ${student.fullName}.`,
+          body: `You have been assigned to ${student.fullName} for ${subjectText}.`,
           studentId: student.id,
           teacherId: teacher.id,
         },
@@ -111,12 +181,22 @@ export async function assignTeacherToStudent(
   });
 }
 
-export async function unassignTeacherFromStudent(studentId: string) {
+export async function unassignTeacherFromStudent(
+  studentId: string,
+  subject?: string,
+) {
   const student = await prisma.student.findUnique({
     where: { id: studentId },
     include: {
       parent: { include: { user: true } },
       assignedTeacher: { include: { user: true } },
+      subjectAssignments: {
+        include: {
+          teacher: {
+            include: { user: true },
+          },
+        },
+      },
     },
   });
 
@@ -125,13 +205,48 @@ export async function unassignTeacherFromStudent(studentId: string) {
   }
 
   return prisma.$transaction(async (tx) => {
+    const trimmedSubject = subject?.trim();
+    const removedAssignments = trimmedSubject
+      ? student.subjectAssignments.filter(
+          (assignment) =>
+            assignment.subject.toLowerCase() === trimmedSubject.toLowerCase(),
+        )
+      : student.subjectAssignments;
+
+    if (trimmedSubject) {
+      await tx.studentSubjectAssignment.deleteMany({
+        where: {
+          studentId,
+          subject: trimmedSubject,
+        },
+      });
+    } else {
+      await tx.studentSubjectAssignment.deleteMany({
+        where: { studentId },
+      });
+    }
+
+    const remainingAssignment = await tx.studentSubjectAssignment.findFirst({
+      where: { studentId },
+    });
+
     const updatedStudent = await tx.student.update({
       where: { id: studentId },
       data: {
-        assignedTeacherId: null,
+        assignedTeacherId: remainingAssignment?.teacherId ?? null,
       },
       include: studentInclude,
     });
+
+    const subjectText = trimmedSubject ? ` for ${trimmedSubject}` : '';
+    const teacherNotifications = removedAssignments.map((assignment) => ({
+      userId: assignment.teacher.userId,
+      role: Role.TEACHER,
+      title: 'Student removed',
+      body: `${student.fullName} has been removed from your student list${subjectText}.`,
+      studentId: student.id,
+      teacherId: assignment.teacherId,
+    }));
 
     await createNotifications(
       [
@@ -139,22 +254,11 @@ export async function unassignTeacherFromStudent(studentId: string) {
           userId: student.parent.userId,
           role: Role.PARENT,
           title: 'Teacher removed',
-          body: `${student.fullName} no longer has an assigned teacher.`,
+          body: `${student.fullName} no longer has an assigned teacher${subjectText}.`,
           studentId: student.id,
           teacherId: student.assignedTeacherId,
         },
-        ...(student.assignedTeacher
-          ? [
-              {
-                userId: student.assignedTeacher.userId,
-                role: Role.TEACHER,
-                title: 'Student removed',
-                body: `${student.fullName} has been removed from your student list.`,
-                studentId: student.id,
-                teacherId: student.assignedTeacher.id,
-              },
-            ]
-          : []),
+        ...teacherNotifications,
       ],
       tx,
     );

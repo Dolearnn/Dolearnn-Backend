@@ -1,7 +1,10 @@
 import { CancellationRequester, CancellationStatus, Role, SessionStatus } from '@prisma/client';
 import { AppError } from '../../../lib/http';
 import { prisma } from '../../../lib/prisma';
-import { createNotifications } from '../../notifications/notification.service';
+import {
+  createAdminNotifications,
+  createNotifications,
+} from '../../notifications/notification.service';
 import type { UpdateMeetingLinkInput } from './session-admin.schemas';
 
 const sessionInclude = {
@@ -159,6 +162,16 @@ export async function approveCancellationRequest(requestId: string) {
       tx,
     );
 
+    await createAdminNotifications(
+      {
+        title: 'Session request approved',
+        body: `Admin approved a ${request.requestedBy === CancellationRequester.FAMILY ? 'family cancellation' : 'teacher reschedule'} request for ${request.session.subject} with ${request.session.student.fullName}.`,
+        studentId: request.session.studentId,
+        teacherId: request.session.teacherId,
+      },
+      tx,
+    );
+
     return { cancellation, session };
   });
 }
@@ -186,9 +199,19 @@ export async function rejectCancellationRequest(requestId: string) {
         : {
             userId: request.session.teacher.userId,
             role: Role.TEACHER,
-            title: 'Cancellation rejected',
-            body: `Your cancellation request for ${request.session.subject} with ${request.session.student.fullName} was rejected.`,
+            title: 'Reschedule request rejected',
+            body: `Your request to change ${request.session.subject} with ${request.session.student.fullName} was rejected. The session is still scheduled.`,
           };
+
+    const otherParty =
+      request.requestedBy === CancellationRequester.FAMILY
+        ? {
+            userId: request.session.teacher.userId,
+            role: Role.TEACHER,
+            title: 'Cancellation request rejected',
+            body: `${request.session.student.fullName}'s family cancellation request was rejected. The session is still scheduled.`,
+          }
+        : null;
 
     await createNotifications(
       [
@@ -197,7 +220,26 @@ export async function rejectCancellationRequest(requestId: string) {
           studentId: request.session.studentId,
           teacherId: request.session.teacherId,
         },
+        ...(otherParty
+          ? [
+              {
+                ...otherParty,
+                studentId: request.session.studentId,
+                teacherId: request.session.teacherId,
+              },
+            ]
+          : []),
       ],
+      tx,
+    );
+
+    await createAdminNotifications(
+      {
+        title: 'Session request rejected',
+        body: `Admin rejected a ${request.requestedBy === CancellationRequester.FAMILY ? 'family cancellation' : 'teacher reschedule'} request for ${request.session.subject} with ${request.session.student.fullName}.`,
+        studentId: request.session.studentId,
+        teacherId: request.session.teacherId,
+      },
       tx,
     );
 

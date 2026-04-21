@@ -5,7 +5,9 @@ import { requireAuth, requireRole } from '../../middleware/auth';
 import {
   createStudentSchema,
   deactivateStudentSchema,
+  declineSessionProposalSchema,
   requestCancellationSchema,
+  saveGoalSchema,
   saveIntakeSchema,
 } from './family.schemas';
 import {
@@ -21,7 +23,9 @@ import {
   listStudents,
   reactivateStudent,
   requestFamilySessionCancellation,
+  saveStudentGoal,
   saveStudentIntake,
+  updateStudent,
 } from './family.service';
 
 export const familyRoutes = Router();
@@ -69,6 +73,21 @@ familyRoutes.post(
 );
 
 familyRoutes.put(
+  '/students/:studentId',
+  asyncHandler(async (req, res) => {
+    const input = createStudentSchema.parse(req.body);
+    const studentId = getRouteParam(req.params.studentId, 'student id');
+    const student = await updateStudent(
+      req.user!.id,
+      req.user!.role,
+      studentId,
+      input,
+    );
+    res.json({ student });
+  }),
+);
+
+familyRoutes.put(
   '/students/:studentId/intake',
   asyncHandler(async (req, res) => {
     const input = saveIntakeSchema.parse(req.body);
@@ -80,6 +99,21 @@ familyRoutes.put(
       input,
     );
     res.json({ intake });
+  }),
+);
+
+familyRoutes.put(
+  '/students/:studentId/goal',
+  asyncHandler(async (req, res) => {
+    const input = saveGoalSchema.parse(req.body);
+    const studentId = getRouteParam(req.params.studentId, 'student id');
+    const goal = await saveStudentGoal(
+      req.user!.id,
+      req.user!.role,
+      studentId,
+      input,
+    );
+    res.json({ goal });
   }),
 );
 
@@ -172,10 +206,12 @@ familyRoutes.post(
   '/session-proposals/:proposalId/decline',
   asyncHandler(async (req, res) => {
     const proposalId = getRouteParam(req.params.proposalId, 'proposal id');
+    const input = declineSessionProposalSchema.parse(req.body);
     const proposal = await declineSessionProposal(
       req.user!.id,
       req.user!.role,
       proposalId,
+      input,
     );
     res.json({ proposal });
   }),

@@ -8,6 +8,7 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "check-db": "node scripts/check-db.js",
+    "smoke": "node scripts/smoke-test.js",
     "seed": "node scripts/seed.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"

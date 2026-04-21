@@ -51,7 +51,42 @@ export const requestCancellationSchema = z.object({
   reason: z.string().trim().min(5, 'Cancellation reason is required'),
 });
 
+export const declineSessionProposalSchema = z
+  .object({
+    reason: z.string().trim().min(5, 'Decline reason is required'),
+    preferredAlternative: intakeScheduleSchema.optional(),
+    preferredAlternativeExactTime: z
+      .string()
+      .trim()
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:mm time format')
+      .optional(),
+  })
+  .refine(
+    (data) =>
+      !data.preferredAlternativeExactTime || !!data.preferredAlternative,
+    {
+      path: ['preferredAlternativeExactTime'],
+      message: 'Choose a saved availability slot before adding an exact time',
+    },
+  );
+
+export const saveGoalSchema = z.object({
+  title: z.string().trim().min(2, 'Goal title is required'),
+  targetDate: z
+    .string()
+    .trim()
+    .optional()
+    .nullable()
+    .refine((value) => !value || !Number.isNaN(Date.parse(value)), {
+      message: 'Target date must be valid',
+    }),
+  progress: z.coerce.number().int().min(0).max(100).optional(),
+});
+
 export type CreateStudentInput = z.infer<typeof createStudentSchema>;
+export type UpdateStudentInput = z.infer<typeof createStudentSchema>;
 export type SaveIntakeInput = z.infer<typeof saveIntakeSchema>;
 export type DeactivateStudentInput = z.infer<typeof deactivateStudentSchema>;
 export type RequestCancellationInput = z.infer<typeof requestCancellationSchema>;
+export type DeclineSessionProposalInput = z.infer<typeof declineSessionProposalSchema>;
+export type SaveGoalInput = z.infer<typeof saveGoalSchema>;

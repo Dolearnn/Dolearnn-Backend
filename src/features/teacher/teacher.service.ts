@@ -17,6 +17,7 @@ import type {
   CreateSessionNoteInput,
   CreateSessionProposalInput,
   RequestCancellationInput,
+  UpdatePayoutAccountInput,
 } from './teacher.schemas';
 
 const DAY_BY_INDEX: DayOfWeek[] = [
@@ -87,8 +88,46 @@ export async function teacherProfile(userId: string, role: Role) {
     lastName: teacher.lastName,
     subjects: teacher.subjects,
     qualifications: teacher.qualifications,
+    bankName: teacher.bankName,
+    accountName: teacher.accountName,
+    accountNumber: teacher.accountNumber,
     hourlyRate: teacher.hourlyRate,
     status: teacher.status,
+  };
+}
+
+export async function updateTeacherPayoutAccount(
+  userId: string,
+  role: Role,
+  input: UpdatePayoutAccountInput,
+) {
+  assertTeacher(role);
+  const teacher = await getTeacherProfile(userId);
+
+  const updated = await prisma.teacherProfile.update({
+    where: { id: teacher.id },
+    data: {
+      bankName: input.bankName.trim(),
+      accountName: input.accountName.trim(),
+      accountNumber: input.accountNumber.trim(),
+    },
+    include: { user: true },
+  });
+
+  return {
+    id: updated.id,
+    userId: updated.userId,
+    name: updated.user.name,
+    email: updated.user.email,
+    firstName: updated.firstName,
+    lastName: updated.lastName,
+    subjects: updated.subjects,
+    qualifications: updated.qualifications,
+    bankName: updated.bankName,
+    accountName: updated.accountName,
+    accountNumber: updated.accountNumber,
+    hourlyRate: updated.hourlyRate,
+    status: updated.status,
   };
 }
 
@@ -107,7 +146,14 @@ export async function teacherStudents(userId: string, role: Role) {
   const teacher = await getTeacherProfile(userId);
   return prisma.student.findMany({
     where: {
-      assignedTeacherId: teacher.id,
+      OR: [
+        { assignedTeacherId: teacher.id },
+        {
+          subjectAssignments: {
+            some: { teacherId: teacher.id },
+          },
+        },
+      ],
     },
     include: {
       parent: {
@@ -121,6 +167,14 @@ export async function teacherStudents(userId: string, role: Role) {
         },
       },
       goals: true,
+      subjectAssignments: {
+        where: { teacherId: teacher.id },
+        include: {
+          teacher: {
+            include: { user: true },
+          },
+        },
+      },
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -320,20 +374,8 @@ export async function requestTeacherSessionCancellation(
 
     await createAdminNotifications(
       {
-        title: 'Cancellation requested',
-        body: `${teacher.user.name} requested to cancel ${session.subject} with ${session.student.fullName}. Reason: ${input.reason.trim()}`,
-        studentId: session.studentId,
-        teacherId: teacher.id,
-      },
-      tx,
-    );
-
-    await createNotification(
-      {
-        userId: session.student.parent.userId,
-        role: Role.PARENT,
-        title: 'Cancellation requested',
-        body: `${teacher.user.name} requested to cancel ${session.subject} with ${session.student.fullName}.`,
+        title: 'Teacher requested reschedule',
+        body: `${teacher.user.name} needs admin help with ${session.subject} for ${session.student.fullName}. Reason: ${input.reason.trim()}`,
         studentId: session.studentId,
         teacherId: teacher.id,
       },
@@ -356,7 +398,16 @@ export async function createSessionProposal(
   const student = await prisma.student.findFirst({
     where: {
       id: input.studentId,
-      assignedTeacherId: teacher.id,
+      OR: [
+        { assignedTeacherId: teacher.id },
+        {
+          subjectAssignments: {
+            some: {
+              teacherId: teacher.id,
+            },
+          },
+        },
+      ],
     },
     include: {
       intake: {
@@ -364,11 +415,22 @@ export async function createSessionProposal(
           schedule: true,
         },
       },
+      subjectAssignments: true,
     },
   });
 
   if (!student) {
     throw new AppError(404, 'Student not found for this teacher');
+  }
+
+  const isAssignedForSubject = student.subjectAssignments.some(
+    (assignment) =>
+      assignment.teacherId === teacher.id &&
+      assignment.subject.toLowerCase() === input.subject.trim().toLowerCase(),
+  );
+
+  if (!isAssignedForSubject && student.assignedTeacherId !== teacher.id) {
+    throw new AppError(403, 'You are not assigned to this subject');
   }
 
   if (student.status !== AccountStatus.ACTIVE) {

@@ -65,6 +65,17 @@ npm run prisma:generate
 npm run prisma:migrate
 npm run seed
 npm run check-db
+npm run smoke
+```
+
+`npm run smoke` runs a temporary end-to-end API check against the configured backend URL. It logs in as admin, creates a temporary teacher and family, creates a student intake, assigns the teacher, proposes and accepts a session, saves the meeting link, confirms attendance from both sides, submits a teacher note, verifies the family can see the completed session, and then cleans up the temporary records.
+
+Before running it, set:
+
+```txt
+SMOKE_API_URL="http://localhost:4000/api"
+SMOKE_ADMIN_EMAIL="your-admin-email"
+SMOKE_ADMIN_PASSWORD="your-admin-password"
 ```
 
 ## Auth
@@ -185,4 +196,4 @@ POST /api/teacher/session-proposals
 
 ## Current Status
 
-This folder is a starter scaffold with the first database schema. The frontend still uses mock data and browser local storage until the backend API is implemented.
+This backend now powers the main frontend flows: auth, role-based access, family students and intakes, admin teacher matching, session proposals, attendance, cancellations, notes, notifications, payments, payouts, and reports.

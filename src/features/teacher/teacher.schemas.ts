@@ -23,8 +23,17 @@ export const requestCancellationSchema = z.object({
   reason: z.string().trim().min(5, 'Cancellation reason is required'),
 });
 
+export const updatePayoutAccountSchema = z.object({
+  bankName: z.string().trim().min(2, 'Bank name is required'),
+  accountName: z.string().trim().min(2, 'Account name is required'),
+  accountNumber: z.string().trim().min(5, 'Account number is required'),
+});
+
 export type CreateSessionProposalInput = z.infer<
   typeof createSessionProposalSchema
 >;
 export type CreateSessionNoteInput = z.infer<typeof createSessionNoteSchema>;
 export type RequestCancellationInput = z.infer<typeof requestCancellationSchema>;
+export type UpdatePayoutAccountInput = z.infer<
+  typeof updatePayoutAccountSchema
+>;

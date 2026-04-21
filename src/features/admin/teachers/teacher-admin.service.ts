@@ -25,6 +25,9 @@ function displayTeacher(teacher: TeacherProfile & { user: User }) {
     bio: teacher.bio,
     subjects: teacher.subjects,
     qualifications: teacher.qualifications,
+    bankName: teacher.bankName,
+    accountName: teacher.accountName,
+    accountNumber: teacher.accountNumber,
     hourlyRate: teacher.hourlyRate,
     rating: teacher.rating,
     totalSessions: teacher.totalSessions,
@@ -126,6 +129,10 @@ export async function terminateTeacher(
     await tx.student.updateMany({
       where: { assignedTeacherId: teacherId },
       data: { assignedTeacherId: null },
+    });
+
+    await tx.studentSubjectAssignment.deleteMany({
+      where: { teacherId },
     });
 
     await tx.user.update({
