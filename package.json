@@ -4,8 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "prisma generate && tsc",
     "start": "node dist/server.js",
+    "postinstall": "prisma generate",
     "typecheck": "tsc --noEmit",
     "check-db": "node scripts/check-db.js",
     "smoke": "node scripts/smoke-test.js",
