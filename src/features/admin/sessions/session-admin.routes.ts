@@ -1,11 +1,17 @@
 import { Router } from 'express';
 import { AppError, asyncHandler } from '../../../lib/http';
-import { updateMeetingLinkSchema } from './session-admin.schemas';
+import {
+  createAdminSessionSchema,
+  updateMeetingLinkSchema,
+} from './session-admin.schemas';
 import {
   approveCancellationRequest,
+  createAdminSession,
+  listBookingRequests,
   listAdminSessions,
   listCancellationRequests,
   rejectCancellationRequest,
+  scheduleBookingRequest,
   updateSessionMeetingLink,
 } from './session-admin.service';
 
@@ -26,6 +32,15 @@ sessionAdminRoutes.get(
   }),
 );
 
+sessionAdminRoutes.post(
+  '/',
+  asyncHandler(async (req, res) => {
+    const input = createAdminSessionSchema.parse(req.body);
+    const result = await createAdminSession(input);
+    res.status(201).json(result);
+  }),
+);
+
 sessionAdminRoutes.patch(
   '/:sessionId/meeting-link',
   asyncHandler(async (req, res) => {
@@ -33,6 +48,23 @@ sessionAdminRoutes.patch(
     const input = updateMeetingLinkSchema.parse(req.body);
     const session = await updateSessionMeetingLink(sessionId, input);
     res.json({ session });
+  }),
+);
+
+sessionAdminRoutes.get(
+  '/booking-requests',
+  asyncHandler(async (_req, res) => {
+    const requests = await listBookingRequests();
+    res.json({ requests });
+  }),
+);
+
+sessionAdminRoutes.post(
+  '/booking-requests/:requestId/schedule',
+  asyncHandler(async (req, res) => {
+    const requestId = getRouteParam(req.params.requestId, 'request id');
+    const result = await scheduleBookingRequest(requestId);
+    res.json(result);
   }),
 );
 

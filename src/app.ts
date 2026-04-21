@@ -39,6 +39,7 @@ export function createApp() {
   const origins = allowedOrigins();
 
   app.use(helmet());
+  
   app.use(
     cors({
       origin(origin, callback) {

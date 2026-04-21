@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import { AppError, asyncHandler } from '../../../lib/http';
-import { assignTeacherSchema } from './student-admin.schemas';
+import { assignTeacherSchema, createAdminStudentSchema } from './student-admin.schemas';
 import {
   assignTeacherToStudent,
+  createAdminStudent,
   listPendingIntakes,
   listStudents,
   unassignTeacherFromStudent,
@@ -22,6 +23,15 @@ studentAdminRoutes.get(
   asyncHandler(async (_req, res) => {
     const students = await listStudents();
     res.json({ students });
+  }),
+);
+
+studentAdminRoutes.post(
+  '/',
+  asyncHandler(async (req, res) => {
+    const input = createAdminStudentSchema.parse(req.body);
+    const student = await createAdminStudent(input);
+    res.status(201).json({ student });
   }),
 );
 

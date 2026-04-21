@@ -1,11 +1,22 @@
-import { CancellationRequester, CancellationStatus, Role, SessionStatus } from '@prisma/client';
+import {
+  BookingRequestStatus,
+  CancellationRequester,
+  CancellationStatus,
+  LessonPackageStatus,
+  Prisma,
+  Role,
+  SessionStatus,
+} from '@prisma/client';
 import { AppError } from '../../../lib/http';
 import { prisma } from '../../../lib/prisma';
 import {
   createAdminNotifications,
   createNotifications,
 } from '../../notifications/notification.service';
-import type { UpdateMeetingLinkInput } from './session-admin.schemas';
+import type {
+  CreateAdminSessionInput,
+  UpdateMeetingLinkInput,
+} from './session-admin.schemas';
 
 const sessionInclude = {
   student: {
@@ -29,6 +40,266 @@ export async function listAdminSessions() {
   return prisma.session.findMany({
     include: sessionInclude,
     orderBy: { startsAt: 'desc' },
+  });
+}
+
+export async function listBookingRequests() {
+  return prisma.sessionBookingRequest.findMany({
+    include: {
+      student: {
+        include: {
+          parent: { include: { user: true } },
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
+function dateWithTime(date: Date, time: string) {
+  const [hours, minutes] = time.split(':').map(Number);
+  const next = new Date(date);
+  next.setUTCHours(hours, minutes, 0, 0);
+  return next;
+}
+
+async function consumePaidSessions(
+  parentId: string,
+  studentId: string,
+  subject: string,
+  count: number,
+  tx: Prisma.TransactionClient,
+) {
+  let remaining = count;
+  const consumed: string[] = [];
+  const packages = await tx.studentLessonPackage.findMany({
+    where: {
+      parentId,
+      studentId,
+      subject,
+      status: LessonPackageStatus.ACTIVE,
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  for (const lessonPackage of packages) {
+    if (remaining <= 0) break;
+    const available =
+      lessonPackage.hoursPurchased - lessonPackage.hoursScheduled;
+    if (available <= 0) continue;
+    const used = Math.min(available, remaining);
+    await tx.studentLessonPackage.update({
+      where: { id: lessonPackage.id },
+      data: {
+        hoursScheduled: { increment: used },
+        status:
+          lessonPackage.hoursScheduled + used >= lessonPackage.hoursPurchased
+            ? LessonPackageStatus.EXHAUSTED
+            : LessonPackageStatus.ACTIVE,
+      },
+    });
+    consumed.push(...Array.from({ length: used }, () => lessonPackage.id));
+    remaining -= used;
+  }
+
+  if (remaining > 0) {
+    throw new AppError(400, 'Not enough unused paid hours for this request');
+  }
+
+  return consumed;
+}
+
+export async function scheduleBookingRequest(requestId: string) {
+  const request = await prisma.sessionBookingRequest.findUnique({
+    where: { id: requestId },
+    include: {
+      parent: { include: { user: true } },
+      student: true,
+    },
+  });
+
+  if (!request) {
+    throw new AppError(404, 'Booking request not found');
+  }
+
+  if (request.status !== BookingRequestStatus.PENDING) {
+    throw new AppError(400, 'This booking request has already been resolved');
+  }
+
+  const assignment = await prisma.studentSubjectAssignment.findUnique({
+    where: {
+      studentId_subject: {
+        studentId: request.studentId,
+        subject: request.subject,
+      },
+    },
+    include: {
+      teacher: {
+        include: { user: true },
+      },
+    },
+  });
+
+  if (!assignment) {
+    throw new AppError(400, 'This subject has no assigned teacher yet');
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const packageIds = await consumePaidSessions(
+      request.parentId,
+      request.studentId,
+      request.subject,
+      request.sessionsRequested,
+      tx,
+    );
+
+    const sessions = [];
+    for (let index = 0; index < request.sessionsRequested; index += 1) {
+      const date = new Date(request.startDate);
+      date.setUTCDate(date.getUTCDate() + index * 7);
+      sessions.push(
+        await tx.session.create({
+          data: {
+            studentId: request.studentId,
+            teacherId: assignment.teacherId,
+            lessonPackageId: packageIds[index],
+            subject: request.subject,
+            startsAt: dateWithTime(date, request.startTime),
+            durationMins: 60,
+            meetLink: assignment.meetLink,
+            amount: assignment.teacher.hourlyRate,
+          },
+          include: sessionInclude,
+        }),
+      );
+    }
+
+    const updatedRequest = await tx.sessionBookingRequest.update({
+      where: { id: request.id },
+      data: {
+        status: BookingRequestStatus.SCHEDULED,
+        scheduledAt: new Date(),
+      },
+    });
+
+    await createNotifications(
+      [
+        {
+          userId: request.parent.userId,
+          role: Role.PARENT,
+          title: 'Sessions scheduled',
+          body: `Admin scheduled ${request.sessionsRequested} ${request.subject} session(s) for ${request.student.fullName}.`,
+          studentId: request.studentId,
+          teacherId: assignment.teacherId,
+        },
+        {
+          userId: assignment.teacher.userId,
+          role: Role.TEACHER,
+          title: 'Sessions scheduled',
+          body: `Admin scheduled ${request.sessionsRequested} ${request.subject} session(s) with ${request.student.fullName}.`,
+          studentId: request.studentId,
+          teacherId: assignment.teacherId,
+        },
+      ],
+      tx,
+    );
+
+    if (!assignment.meetLink) {
+      await createAdminNotifications(
+        {
+          title: 'Meeting link needed',
+          body: `${request.student.fullName}'s ${request.subject} sessions were scheduled without a meeting link. Add the link to the teacher-student match.`,
+          studentId: request.studentId,
+          teacherId: assignment.teacherId,
+        },
+        tx,
+      );
+    }
+
+    return { request: updatedRequest, sessions };
+  });
+}
+
+export async function createAdminSession(input: CreateAdminSessionInput) {
+  const subject = input.subject.trim();
+  const assignment = await prisma.studentSubjectAssignment.findUnique({
+    where: {
+      studentId_subject: {
+        studentId: input.studentId,
+        subject,
+      },
+    },
+    include: {
+      teacher: { include: { user: true } },
+      student: { include: { parent: { include: { user: true } } } },
+    },
+  });
+
+  if (!assignment) {
+    throw new AppError(
+      400,
+      'This student has no teacher assigned for this subject',
+    );
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const packageIds = await consumePaidSessions(
+      assignment.student.parentId,
+      assignment.studentId,
+      subject,
+      1,
+      tx,
+    );
+
+    const session = await tx.session.create({
+      data: {
+        studentId: assignment.studentId,
+        teacherId: assignment.teacherId,
+        lessonPackageId: packageIds[0],
+        subject,
+        startsAt: new Date(input.startsAt),
+        durationMins: input.durationMins,
+        meetLink: input.meetLink ?? assignment.meetLink,
+        amount: assignment.teacher.hourlyRate,
+      },
+      include: sessionInclude,
+    });
+
+    await createNotifications(
+      [
+        {
+          userId: assignment.student.parent.userId,
+          role: Role.PARENT,
+          title: 'Session scheduled',
+          body: `Admin scheduled a ${subject} session for ${assignment.student.fullName}.`,
+          studentId: assignment.studentId,
+          teacherId: assignment.teacherId,
+        },
+        {
+          userId: assignment.teacher.userId,
+          role: Role.TEACHER,
+          title: 'Session scheduled',
+          body: `Admin scheduled a ${subject} session with ${assignment.student.fullName}.`,
+          studentId: assignment.studentId,
+          teacherId: assignment.teacherId,
+        },
+      ],
+      tx,
+    );
+
+    if (!session.meetLink) {
+      await createAdminNotifications(
+        {
+          title: 'Meeting link needed',
+          body: `The ${subject} session for ${assignment.student.fullName} needs a meeting link.`,
+          studentId: assignment.studentId,
+          teacherId: assignment.teacherId,
+        },
+        tx,
+      );
+    }
+
+    return { session };
   });
 }
 
@@ -104,6 +375,7 @@ async function getCancellationRequest(requestId: string) {
             },
           },
           teacher: true,
+          lessonPackage: true,
         },
       },
     },
@@ -139,6 +411,16 @@ export async function approveCancellationRequest(requestId: string) {
       },
       include: sessionInclude,
     });
+
+    if (request.session.lessonPackageId) {
+      await tx.studentLessonPackage.update({
+        where: { id: request.session.lessonPackageId },
+        data: {
+          hoursScheduled: { decrement: 1 },
+          status: LessonPackageStatus.ACTIVE,
+        },
+      });
+    }
 
     await createNotifications(
       [

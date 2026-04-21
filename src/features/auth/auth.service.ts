@@ -5,6 +5,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { env } from '../../config/env';
 import { AppError } from '../../lib/http';
 import { prisma } from '../../lib/prisma';
+import { createAdminNotifications } from '../notifications/notification.service';
 import type {
   ChangePasswordInput,
   GoogleAuthInput,
@@ -75,19 +76,34 @@ export async function registerParent(input: RegisterInput) {
   }
 
   const passwordHash = await bcrypt.hash(input.password, 12);
-  const user = await prisma.user.create({
-    data: {
-      email,
-      name: input.name.trim(),
-      passwordHash,
-      authProvider: AuthProvider.EMAIL,
-      role: Role.PARENT,
-      parentProfile: {
-        create: {
-          whatsapp: input.whatsapp?.trim() || null,
+  const name = input.name.trim();
+  const whatsapp = input.whatsapp?.trim() || null;
+
+  const user = await prisma.$transaction(async (tx) => {
+    const created = await tx.user.create({
+      data: {
+        email,
+        name,
+        passwordHash,
+        authProvider: AuthProvider.EMAIL,
+        role: Role.PARENT,
+        parentProfile: {
+          create: {
+            whatsapp,
+          },
         },
       },
-    },
+    });
+
+    await createAdminNotifications(
+      {
+        title: 'New family registered',
+        body: `${name} just signed up. Email: ${email}. WhatsApp: ${whatsapp ?? 'not provided'}.`,
+      },
+      tx,
+    );
+
+    return created;
   });
 
   return authResponse(user);
@@ -156,17 +172,29 @@ export async function loginOrRegisterWithGoogle(input: GoogleAuthInput) {
   });
 
   if (!existingByEmail) {
-    const user = await prisma.user.create({
-      data: {
-        email: googleUser.email,
-        name: googleUser.name,
-        googleId: googleUser.googleId,
-        authProvider: AuthProvider.GOOGLE,
-        role: Role.PARENT,
-        parentProfile: {
-          create: {},
+    const user = await prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          email: googleUser.email,
+          name: googleUser.name,
+          googleId: googleUser.googleId,
+          authProvider: AuthProvider.GOOGLE,
+          role: Role.PARENT,
+          parentProfile: {
+            create: {},
+          },
         },
-      },
+      });
+
+      await createAdminNotifications(
+        {
+          title: 'New family registered',
+          body: `${googleUser.name} just signed up with Google. Email: ${googleUser.email}.`,
+        },
+        tx,
+      );
+
+      return created;
     });
     return authResponse(user);
   }

@@ -20,6 +20,9 @@ CREATE TYPE "CurrentLevel" AS ENUM ('STRUGGLING', 'AVERAGE', 'ABOVE_AVERAGE');
 CREATE TYPE "GenderPreference" AS ENUM ('NO_PREFERENCE', 'MALE', 'FEMALE');
 
 -- CreateEnum
+CREATE TYPE "TeacherGender" AS ENUM ('MALE', 'FEMALE');
+
+-- CreateEnum
 CREATE TYPE "TimeBlock" AS ENUM ('MORNING', 'AFTERNOON', 'EVENING');
 
 -- CreateEnum
@@ -48,6 +51,12 @@ CREATE TYPE "PaymentGateway" AS ENUM ('STRIPE', 'FLUTTERWAVE');
 
 -- CreateEnum
 CREATE TYPE "PayoutStatus" AS ENUM ('PENDING', 'PAID');
+
+-- CreateEnum
+CREATE TYPE "BookingRequestStatus" AS ENUM ('PENDING', 'SCHEDULED', 'CANCELLED');
+
+-- CreateEnum
+CREATE TYPE "LessonPackageStatus" AS ENUM ('ACTIVE', 'EXHAUSTED', 'CANCELLED');
 
 -- CreateTable
 CREATE TABLE "User" (
@@ -85,6 +94,7 @@ CREATE TABLE "TeacherProfile" (
     "lastName" TEXT NOT NULL,
     "phoneCountry" TEXT,
     "phoneNumber" TEXT,
+    "gender" "TeacherGender",
     "bio" TEXT,
     "subjects" TEXT[],
     "qualifications" TEXT[],
@@ -121,6 +131,55 @@ CREATE TABLE "Student" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Student_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "StudentSubjectAssignment" (
+    "id" TEXT NOT NULL,
+    "studentId" TEXT NOT NULL,
+    "teacherId" TEXT NOT NULL,
+    "subject" TEXT NOT NULL,
+    "meetLink" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "StudentSubjectAssignment_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SessionBookingRequest" (
+    "id" TEXT NOT NULL,
+    "parentId" TEXT NOT NULL,
+    "studentId" TEXT NOT NULL,
+    "subject" TEXT NOT NULL,
+    "day" "DayOfWeek" NOT NULL,
+    "timeBlock" "TimeBlock" NOT NULL,
+    "startTime" TEXT NOT NULL,
+    "startDate" TIMESTAMP(3) NOT NULL,
+    "sessionsRequested" INTEGER NOT NULL,
+    "status" "BookingRequestStatus" NOT NULL DEFAULT 'PENDING',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "scheduledAt" TIMESTAMP(3),
+
+    CONSTRAINT "SessionBookingRequest_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "StudentLessonPackage" (
+    "id" TEXT NOT NULL,
+    "parentId" TEXT NOT NULL,
+    "studentId" TEXT NOT NULL,
+    "subject" TEXT NOT NULL,
+    "hoursPurchased" INTEGER NOT NULL,
+    "hoursScheduled" INTEGER NOT NULL DEFAULT 0,
+    "hoursCompleted" INTEGER NOT NULL DEFAULT 0,
+    "amountPaid" DECIMAL(10,2) NOT NULL,
+    "gateway" "PaymentGateway" NOT NULL,
+    "status" "LessonPackageStatus" NOT NULL DEFAULT 'ACTIVE',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "StudentLessonPackage_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -193,6 +252,7 @@ CREATE TABLE "Session" (
     "id" TEXT NOT NULL,
     "studentId" TEXT NOT NULL,
     "teacherId" TEXT NOT NULL,
+    "lessonPackageId" TEXT,
     "proposalId" TEXT,
     "subject" TEXT NOT NULL,
     "startsAt" TIMESTAMP(3) NOT NULL,
@@ -304,6 +364,12 @@ CREATE UNIQUE INDEX "ParentProfile_userId_key" ON "ParentProfile"("userId");
 CREATE UNIQUE INDEX "TeacherProfile_userId_key" ON "TeacherProfile"("userId");
 
 -- CreateIndex
+CREATE INDEX "StudentSubjectAssignment_teacherId_idx" ON "StudentSubjectAssignment"("teacherId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "StudentSubjectAssignment_studentId_subject_key" ON "StudentSubjectAssignment"("studentId", "subject");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Intake_studentId_key" ON "Intake"("studentId");
 
 -- CreateIndex
@@ -337,6 +403,24 @@ ALTER TABLE "Student" ADD CONSTRAINT "Student_parentId_fkey" FOREIGN KEY ("paren
 ALTER TABLE "Student" ADD CONSTRAINT "Student_assignedTeacherId_fkey" FOREIGN KEY ("assignedTeacherId") REFERENCES "TeacherProfile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "StudentSubjectAssignment" ADD CONSTRAINT "StudentSubjectAssignment_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "Student"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "StudentSubjectAssignment" ADD CONSTRAINT "StudentSubjectAssignment_teacherId_fkey" FOREIGN KEY ("teacherId") REFERENCES "TeacherProfile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SessionBookingRequest" ADD CONSTRAINT "SessionBookingRequest_parentId_fkey" FOREIGN KEY ("parentId") REFERENCES "ParentProfile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SessionBookingRequest" ADD CONSTRAINT "SessionBookingRequest_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "Student"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "StudentLessonPackage" ADD CONSTRAINT "StudentLessonPackage_parentId_fkey" FOREIGN KEY ("parentId") REFERENCES "ParentProfile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "StudentLessonPackage" ADD CONSTRAINT "StudentLessonPackage_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "Student"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Intake" ADD CONSTRAINT "Intake_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "Student"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -356,6 +440,9 @@ ALTER TABLE "Session" ADD CONSTRAINT "Session_studentId_fkey" FOREIGN KEY ("stud
 
 -- AddForeignKey
 ALTER TABLE "Session" ADD CONSTRAINT "Session_teacherId_fkey" FOREIGN KEY ("teacherId") REFERENCES "TeacherProfile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Session" ADD CONSTRAINT "Session_lessonPackageId_fkey" FOREIGN KEY ("lessonPackageId") REFERENCES "StudentLessonPackage"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Session" ADD CONSTRAINT "Session_proposalId_fkey" FOREIGN KEY ("proposalId") REFERENCES "SessionProposal"("id") ON DELETE SET NULL ON UPDATE CASCADE;

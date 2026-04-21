@@ -18,6 +18,7 @@ import type {
   CreateSessionProposalInput,
   RequestCancellationInput,
   UpdatePayoutAccountInput,
+  UpdateTeacherProfileInput,
 } from './teacher.schemas';
 
 const DAY_BY_INDEX: DayOfWeek[] = [
@@ -76,9 +77,9 @@ function isInsideBlock(date: Date, block: TimeBlock) {
   return minutes >= range.start && minutes < range.end;
 }
 
-export async function teacherProfile(userId: string, role: Role) {
-  assertTeacher(role);
-  const teacher = await getTeacherProfile(userId);
+type TeacherWithUser = Awaited<ReturnType<typeof getTeacherProfile>>;
+
+function serializeTeacher(teacher: TeacherWithUser) {
   return {
     id: teacher.id,
     userId: teacher.userId,
@@ -86,6 +87,10 @@ export async function teacherProfile(userId: string, role: Role) {
     email: teacher.user.email,
     firstName: teacher.firstName,
     lastName: teacher.lastName,
+    phoneCountry: teacher.phoneCountry,
+    phoneNumber: teacher.phoneNumber,
+    gender: teacher.gender,
+    bio: teacher.bio,
     subjects: teacher.subjects,
     qualifications: teacher.qualifications,
     bankName: teacher.bankName,
@@ -94,6 +99,12 @@ export async function teacherProfile(userId: string, role: Role) {
     hourlyRate: teacher.hourlyRate,
     status: teacher.status,
   };
+}
+
+export async function teacherProfile(userId: string, role: Role) {
+  assertTeacher(role);
+  const teacher = await getTeacherProfile(userId);
+  return serializeTeacher(teacher);
 }
 
 export async function updateTeacherPayoutAccount(
@@ -114,21 +125,64 @@ export async function updateTeacherPayoutAccount(
     include: { user: true },
   });
 
-  return {
-    id: updated.id,
-    userId: updated.userId,
-    name: updated.user.name,
-    email: updated.user.email,
-    firstName: updated.firstName,
-    lastName: updated.lastName,
-    subjects: updated.subjects,
-    qualifications: updated.qualifications,
-    bankName: updated.bankName,
-    accountName: updated.accountName,
-    accountNumber: updated.accountNumber,
-    hourlyRate: updated.hourlyRate,
-    status: updated.status,
-  };
+  return serializeTeacher(updated);
+}
+
+function trimOrNull(value: string | undefined | null) {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+}
+
+export async function updateTeacherProfile(
+  userId: string,
+  role: Role,
+  input: UpdateTeacherProfileInput,
+) {
+  assertTeacher(role);
+  const teacher = await getTeacherProfile(userId);
+
+  const teacherData: Record<string, unknown> = {};
+  if (input.firstName !== undefined)
+    teacherData.firstName = input.firstName.trim();
+  if (input.lastName !== undefined)
+    teacherData.lastName = input.lastName.trim();
+  if (input.bio !== undefined) teacherData.bio = trimOrNull(input.bio);
+  if (input.phoneCountry !== undefined)
+    teacherData.phoneCountry = trimOrNull(input.phoneCountry);
+  if (input.phoneNumber !== undefined)
+    teacherData.phoneNumber = trimOrNull(input.phoneNumber);
+  if (input.gender !== undefined) teacherData.gender = input.gender ?? null;
+  if (input.subjects !== undefined)
+    teacherData.subjects = input.subjects.map((subject) => subject.trim());
+  if (input.qualifications !== undefined)
+    teacherData.qualifications = input.qualifications.map((item) =>
+      item.trim(),
+    );
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const updatedTeacher = await tx.teacherProfile.update({
+      where: { id: teacher.id },
+      data: teacherData,
+      include: { user: true },
+    });
+
+    if (input.firstName !== undefined || input.lastName !== undefined) {
+      const name = `${updatedTeacher.firstName} ${updatedTeacher.lastName}`.trim();
+      if (name && name !== updatedTeacher.user.name) {
+        const userWithName = await tx.user.update({
+          where: { id: updatedTeacher.userId },
+          data: { name },
+        });
+        updatedTeacher.user = userWithName;
+      }
+    }
+
+    return updatedTeacher;
+  });
+
+  return serializeTeacher(updated);
 }
 
 export async function teacherPayouts(userId: string, role: Role) {
@@ -272,6 +326,15 @@ export async function confirmTeacherAttendance(
           totalSessions: { increment: 1 },
         },
       });
+
+      if (session.lessonPackageId) {
+        await tx.studentLessonPackage.update({
+          where: { id: session.lessonPackageId },
+          data: {
+            hoursCompleted: { increment: 1 },
+          },
+        });
+      }
     }
 
     if (shouldComplete) {

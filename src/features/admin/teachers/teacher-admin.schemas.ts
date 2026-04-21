@@ -1,3 +1,4 @@
+import { TeacherGender } from '@prisma/client';
 import { z } from 'zod';
 
 export const createTeacherSchema = z.object({
@@ -6,6 +7,7 @@ export const createTeacherSchema = z.object({
   email: z.string().trim().email('Valid email is required'),
   phoneCountry: z.string().trim().optional(),
   phoneNumber: z.string().trim().optional(),
+  gender: z.nativeEnum(TeacherGender),
   bio: z.string().trim().optional(),
   subjects: z.array(z.string().trim().min(1)).min(1, 'Add at least one subject'),
   qualifications: z.array(z.string().trim().min(1)).default([]),

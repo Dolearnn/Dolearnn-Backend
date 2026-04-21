@@ -22,6 +22,7 @@ function displayTeacher(teacher: TeacherProfile & { user: User }) {
     email: teacher.user.email,
     phoneCountry: teacher.phoneCountry,
     phoneNumber: teacher.phoneNumber,
+    gender: teacher.gender,
     bio: teacher.bio,
     subjects: teacher.subjects,
     qualifications: teacher.qualifications,
@@ -73,6 +74,7 @@ export async function createTeacher(input: CreateTeacherInput) {
           lastName: input.lastName.trim(),
           phoneCountry: input.phoneCountry?.trim() || null,
           phoneNumber: input.phoneNumber?.trim() || null,
+          gender: input.gender,
           bio: input.bio?.trim() || null,
           subjects: input.subjects.map((subject) => subject.trim()),
           qualifications: input.qualifications.map((qualification) =>

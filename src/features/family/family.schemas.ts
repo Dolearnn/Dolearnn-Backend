@@ -83,6 +83,19 @@ export const saveGoalSchema = z.object({
   progress: z.coerce.number().int().min(0).max(100).optional(),
 });
 
+export const createBookingRequestSchema = z.object({
+  studentId: z.string().min(1, 'Student is required'),
+  subject: z.string().trim().min(1, 'Subject is required'),
+  day: z.nativeEnum(DayOfWeek),
+  timeBlock: z.nativeEnum(TimeBlock),
+  startTime: z
+    .string()
+    .trim()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:mm time format'),
+  startDate: z.coerce.date(),
+  sessionsRequested: z.coerce.number().int().positive(),
+});
+
 export type CreateStudentInput = z.infer<typeof createStudentSchema>;
 export type UpdateStudentInput = z.infer<typeof createStudentSchema>;
 export type SaveIntakeInput = z.infer<typeof saveIntakeSchema>;
@@ -90,3 +103,4 @@ export type DeactivateStudentInput = z.infer<typeof deactivateStudentSchema>;
 export type RequestCancellationInput = z.infer<typeof requestCancellationSchema>;
 export type DeclineSessionProposalInput = z.infer<typeof declineSessionProposalSchema>;
 export type SaveGoalInput = z.infer<typeof saveGoalSchema>;
+export type CreateBookingRequestInput = z.infer<typeof createBookingRequestSchema>;

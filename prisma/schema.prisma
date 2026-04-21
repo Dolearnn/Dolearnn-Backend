@@ -56,6 +56,11 @@ enum GenderPreference {
   FEMALE
 }
 
+enum TeacherGender {
+  MALE
+  FEMALE
+}
+
 enum TimeBlock {
   MORNING
   AFTERNOON
@@ -116,6 +121,18 @@ enum PayoutStatus {
   PAID
 }
 
+enum BookingRequestStatus {
+  PENDING
+  SCHEDULED
+  CANCELLED
+}
+
+enum LessonPackageStatus {
+  ACTIVE
+  EXHAUSTED
+  CANCELLED
+}
+
 model User {
   id           String        @id @default(cuid())
   email        String        @unique
@@ -144,6 +161,8 @@ model ParentProfile {
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   students Student[]
   payments Payment[]
+  lessonPackages StudentLessonPackage[]
+  bookingRequests SessionBookingRequest[]
 }
 
 model TeacherProfile {
@@ -153,6 +172,7 @@ model TeacherProfile {
   lastName          String
   phoneCountry      String?
   phoneNumber       String?
+  gender            TeacherGender?
   bio               String?
   subjects          String[]
   qualifications    String[]
@@ -200,8 +220,10 @@ model Student {
   intake          Intake?
   goals           Goal[]
   sessions        Session[]
+  lessonPackages  StudentLessonPackage[]
   proposals       SessionProposal[]
   notifications   Notification[]
+  bookingRequests SessionBookingRequest[]
 }
 
 model StudentSubjectAssignment {
@@ -209,6 +231,7 @@ model StudentSubjectAssignment {
   studentId String
   teacherId String
   subject   String
+  meetLink  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -217,6 +240,43 @@ model StudentSubjectAssignment {
 
   @@unique([studentId, subject])
   @@index([teacherId])
+}
+
+model SessionBookingRequest {
+  id                String               @id @default(cuid())
+  parentId          String
+  studentId         String
+  subject           String
+  day               DayOfWeek
+  timeBlock         TimeBlock
+  startTime         String
+  startDate         DateTime
+  sessionsRequested Int
+  status            BookingRequestStatus @default(PENDING)
+  createdAt         DateTime             @default(now())
+  scheduledAt       DateTime?
+
+  parent  ParentProfile @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  student Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model StudentLessonPackage {
+  id             String              @id @default(cuid())
+  parentId       String
+  studentId      String
+  subject        String
+  hoursPurchased Int
+  hoursScheduled Int                 @default(0)
+  hoursCompleted Int                 @default(0)
+  amountPaid     Decimal             @db.Decimal(10, 2)
+  gateway        PaymentGateway
+  status         LessonPackageStatus @default(ACTIVE)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  parent   ParentProfile @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  student  Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  sessions Session[]
 }
 
 model Intake {
@@ -289,6 +349,7 @@ model Session {
   id           String        @id @default(cuid())
   studentId    String
   teacherId    String
+  lessonPackageId String?
   proposalId   String?       @unique
   subject      String
   startsAt     DateTime
@@ -301,6 +362,7 @@ model Session {
 
   student      Student              @relation(fields: [studentId], references: [id], onDelete: Cascade)
   teacher      TeacherProfile       @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  lessonPackage StudentLessonPackage? @relation(fields: [lessonPackageId], references: [id], onDelete: SetNull)
   proposal     SessionProposal?     @relation(fields: [proposalId], references: [id], onDelete: SetNull)
   attendance   Attendance?
   note         SessionNote?

@@ -1,4 +1,4 @@
-import { PayoutStatus, Role } from '@prisma/client';
+import { LessonPackageStatus, PayoutStatus, Role } from '@prisma/client';
 import { AppError } from '../../../lib/http';
 import { prisma } from '../../../lib/prisma';
 import {
@@ -43,14 +43,38 @@ export async function listPayments() {
   });
 }
 
-export async function createPayment(input: CreatePaymentInput) {
-  const parent = await prisma.parentProfile.findUnique({
-    where: { id: input.parentId },
-    include: { user: true },
+export async function listLessonPackages() {
+  return prisma.studentLessonPackage.findMany({
+    include: {
+      parent: {
+        include: { user: true },
+      },
+      student: true,
+    },
+    orderBy: { createdAt: 'desc' },
   });
+}
+
+export async function createPayment(input: CreatePaymentInput) {
+  const [parent, student] = await Promise.all([
+    prisma.parentProfile.findUnique({
+      where: { id: input.parentId },
+      include: { user: true },
+    }),
+    prisma.student.findFirst({
+      where: {
+        id: input.studentId,
+        parentId: input.parentId,
+      },
+    }),
+  ]);
 
   if (!parent) {
     throw new AppError(404, 'Parent not found');
+  }
+
+  if (!student) {
+    throw new AppError(404, 'Student not found for this parent');
   }
 
   return prisma.$transaction(async (tx) => {
@@ -69,17 +93,36 @@ export async function createPayment(input: CreatePaymentInput) {
       },
     });
 
+    const lessonPackage = await tx.studentLessonPackage.create({
+      data: {
+        parentId: parent.id,
+        studentId: student.id,
+        subject: input.subject.trim(),
+        hoursPurchased: input.sessionsIncluded,
+        amountPaid: input.amount,
+        gateway: input.gateway,
+        status: LessonPackageStatus.ACTIVE,
+      },
+      include: {
+        parent: {
+          include: { user: true },
+        },
+        student: true,
+      },
+    });
+
     await createNotification(
       {
         userId: parent.userId,
         role: Role.PARENT,
         title: 'Payment recorded',
-        body: `Admin recorded your ${input.plan.replaceAll('_', ' ').toLowerCase()} payment for $${input.amount}.`,
+        body: `Admin recorded ${input.sessionsIncluded} paid ${input.subject.trim()} hour(s) for ${student.fullName}.`,
+        studentId: student.id,
       },
       tx,
     );
 
-    return payment;
+    return { payment, lessonPackage };
   });
 }
 

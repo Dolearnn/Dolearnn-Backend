@@ -1,7 +1,9 @@
 import {
   AccountStatus,
+  BookingRequestStatus,
   CancellationRequester,
   CancellationStatus,
+  LessonPackageStatus,
   DayOfWeek,
   ProposalStatus,
   Role,
@@ -16,6 +18,7 @@ import {
 } from '../notifications/notification.service';
 import type {
   CreateStudentInput,
+  CreateBookingRequestInput,
   DeactivateStudentInput,
   DeclineSessionProposalInput,
   RequestCancellationInput,
@@ -127,6 +130,16 @@ function timeToMinutes(time: string) {
   return hours * 60 + minutes;
 }
 
+const dayIndex: Record<DayOfWeek, number> = {
+  [DayOfWeek.SUN]: 0,
+  [DayOfWeek.MON]: 1,
+  [DayOfWeek.TUE]: 2,
+  [DayOfWeek.WED]: 3,
+  [DayOfWeek.THU]: 4,
+  [DayOfWeek.FRI]: 5,
+  [DayOfWeek.SAT]: 6,
+};
+
 function exactTimeIsInsideBlock(time: string, block: TimeBlock) {
   const minutes = timeToMinutes(time);
   const range = timeBlockRanges[block];
@@ -152,6 +165,65 @@ export async function listFamilyPayments(userId: string, role: Role) {
 
   return prisma.payment.findMany({
     where: { parentId: parent.id },
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
+export async function familySessionCreditSummary(userId: string, role: Role) {
+  assertParent(role);
+  const parent = await getParentProfile(userId);
+  const [packages, pendingRequests] = await Promise.all([
+    prisma.studentLessonPackage.findMany({ where: { parentId: parent.id } }),
+    prisma.sessionBookingRequest.findMany({
+      where: {
+        parentId: parent.id,
+        status: BookingRequestStatus.PENDING,
+      },
+    }),
+  ]);
+
+  const paidSessions = packages.reduce(
+    (sum, lessonPackage) => sum + lessonPackage.hoursPurchased,
+    0,
+  );
+  const usedSessions = packages.reduce(
+    (sum, lessonPackage) => sum + lessonPackage.hoursScheduled,
+    0,
+  );
+  const pendingSessions = pendingRequests.reduce(
+    (sum, request) => sum + request.sessionsRequested,
+    0,
+  );
+
+  return {
+    paidSessions,
+    usedSessions,
+    pendingSessions,
+    availableSessions: Math.max(0, paidSessions - usedSessions - pendingSessions),
+    packages: packages.map((lessonPackage) => ({
+      id: lessonPackage.id,
+      childId: lessonPackage.studentId,
+      subject: lessonPackage.subject,
+      paidSessions: lessonPackage.hoursPurchased,
+      usedSessions: lessonPackage.hoursScheduled,
+      completedSessions: lessonPackage.hoursCompleted,
+      availableSessions: Math.max(
+        0,
+        lessonPackage.hoursPurchased - lessonPackage.hoursScheduled,
+      ),
+      status: lessonPackage.status,
+    })),
+  };
+}
+
+export async function listBookingRequests(userId: string, role: Role) {
+  assertParent(role);
+  const parent = await getParentProfile(userId);
+  return prisma.sessionBookingRequest.findMany({
+    where: { parentId: parent.id },
+    include: {
+      student: true,
+    },
     orderBy: { createdAt: 'desc' },
   });
 }
@@ -429,6 +501,108 @@ export async function listFamilySessions(userId: string, role: Role) {
   });
 }
 
+export async function createBookingRequest(
+  userId: string,
+  role: Role,
+  input: CreateBookingRequestInput,
+) {
+  assertParent(role);
+  const student = await getOwnedStudent(userId, input.studentId);
+  const parent = await getParentProfile(userId);
+  const subject = input.subject.trim();
+  const [packages, pendingRequests] = await Promise.all([
+    prisma.studentLessonPackage.findMany({
+      where: {
+        parentId: parent.id,
+        studentId: student.id,
+        subject,
+        status: LessonPackageStatus.ACTIVE,
+      },
+      orderBy: { createdAt: 'asc' },
+    }),
+    prisma.sessionBookingRequest.findMany({
+      where: {
+        parentId: parent.id,
+        studentId: student.id,
+        subject,
+        status: BookingRequestStatus.PENDING,
+      },
+    }),
+  ]);
+  const availableSessions =
+    packages.reduce(
+      (sum, lessonPackage) =>
+        sum + (lessonPackage.hoursPurchased - lessonPackage.hoursScheduled),
+      0,
+    ) -
+    pendingRequests.reduce(
+      (sum, request) => sum + request.sessionsRequested,
+      0,
+    );
+
+  if (input.sessionsRequested > availableSessions) {
+    throw new AppError(
+      400,
+      'Requested sessions exceed available paid hours for this student and subject',
+    );
+  }
+
+  const subjectAssigned = student.subjectAssignments.some(
+    (assignment) =>
+      assignment.subject.toLowerCase() === input.subject.trim().toLowerCase(),
+  );
+
+  if (!subjectAssigned) {
+    throw new AppError(400, 'This subject has not been matched with a teacher yet');
+  }
+
+  const savedAvailability = student.intake?.schedule.find(
+    (entry) => entry.day === input.day && entry.time === input.timeBlock,
+  );
+
+  if (!savedAvailability) {
+    throw new AppError(400, 'Selected calendar slot must match saved availability');
+  }
+
+  if (!exactTimeIsInsideBlock(input.startTime, input.timeBlock)) {
+    throw new AppError(400, 'Start time must be inside the selected session block');
+  }
+
+  const startDate = input.startDate;
+  if (startDate.getUTCDay() !== dayIndex[input.day]) {
+    throw new AppError(400, 'Start date must match the selected day');
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const request = await tx.sessionBookingRequest.create({
+      data: {
+        parentId: student.parentId,
+        studentId: student.id,
+        subject,
+        day: input.day,
+        timeBlock: input.timeBlock,
+        startTime: input.startTime,
+        startDate,
+        sessionsRequested: input.sessionsRequested,
+      },
+      include: {
+        student: true,
+      },
+    });
+
+    await createAdminNotifications(
+      {
+        title: 'Calendar sessions requested',
+        body: `${student.fullName}'s family requested ${input.sessionsRequested} weekly ${input.subject.trim()} session(s).`,
+        studentId: student.id,
+      },
+      tx,
+    );
+
+    return request;
+  });
+}
+
 async function getOwnedSession(userId: string, sessionId: string) {
   const parent = await getParentProfile(userId);
   const session = await prisma.session.findFirst({
@@ -461,6 +635,7 @@ export async function confirmFamilyAttendance(
   }
 
   const now = new Date();
+  const wasCompleted = session.status === SessionStatus.COMPLETED;
 
   return prisma.$transaction(async (tx) => {
     const attendance = await tx.attendance.upsert({
@@ -480,6 +655,15 @@ export async function confirmFamilyAttendance(
       data: shouldComplete ? { status: SessionStatus.COMPLETED } : {},
       include: sessionInclude,
     });
+
+    if (shouldComplete && !wasCompleted && session.lessonPackageId) {
+      await tx.studentLessonPackage.update({
+        where: { id: session.lessonPackageId },
+        data: {
+          hoursCompleted: { increment: 1 },
+        },
+      });
+    }
 
     return { session: updatedSession, attendance };
   });

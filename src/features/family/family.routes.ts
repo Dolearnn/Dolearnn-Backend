@@ -3,6 +3,7 @@ import { Role } from '@prisma/client';
 import { AppError, asyncHandler } from '../../lib/http';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import {
+  createBookingRequestSchema,
   createStudentSchema,
   deactivateStudentSchema,
   declineSessionProposalSchema,
@@ -12,14 +13,16 @@ import {
 } from './family.schemas';
 import {
   acceptSessionProposal,
-  createStudent,
+  createBookingRequest,
   deactivateStudent,
   declineSessionProposal,
   familyProfile,
+  familySessionCreditSummary,
   confirmFamilyAttendance,
   listFamilyPayments,
   listSessionProposals,
   listFamilySessions,
+  listBookingRequests,
   listStudents,
   reactivateStudent,
   requestFamilySessionCancellation,
@@ -66,9 +69,7 @@ familyRoutes.get(
 familyRoutes.post(
   '/students',
   asyncHandler(async (req, res) => {
-    const input = createStudentSchema.parse(req.body);
-    const student = await createStudent(req.user!.id, req.user!.role, input);
-    res.status(201).json({ student });
+    throw new AppError(403, 'Students are created by admin');
   }),
 );
 
@@ -150,6 +151,35 @@ familyRoutes.get(
   asyncHandler(async (req, res) => {
     const sessions = await listFamilySessions(req.user!.id, req.user!.role);
     res.json({ sessions });
+  }),
+);
+
+familyRoutes.get(
+  '/session-credits',
+  asyncHandler(async (req, res) => {
+    const credits = await familySessionCreditSummary(req.user!.id, req.user!.role);
+    res.json({ credits });
+  }),
+);
+
+familyRoutes.get(
+  '/booking-requests',
+  asyncHandler(async (req, res) => {
+    const requests = await listBookingRequests(req.user!.id, req.user!.role);
+    res.json({ requests });
+  }),
+);
+
+familyRoutes.post(
+  '/booking-requests',
+  asyncHandler(async (req, res) => {
+    const input = createBookingRequestSchema.parse(req.body);
+    const request = await createBookingRequest(
+      req.user!.id,
+      req.user!.role,
+      input,
+    );
+    res.status(201).json({ request });
   }),
 );
 

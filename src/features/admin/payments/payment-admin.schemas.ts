@@ -3,6 +3,8 @@ import { z } from 'zod';
 
 export const createPaymentSchema = z.object({
   parentId: z.string().min(1),
+  studentId: z.string().min(1, 'Student is required'),
+  subject: z.string().trim().min(1, 'Subject is required'),
   plan: z.nativeEnum(PaymentPlan),
   amount: z.coerce.number().positive(),
   gateway: z.nativeEnum(PaymentGateway),

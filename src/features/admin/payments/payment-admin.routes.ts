@@ -7,6 +7,7 @@ import {
 } from './payment-admin.schemas';
 import {
   createPayment,
+  listLessonPackages,
   listParentsForPayments,
   listPayments,
   listPayoutSummaries,
@@ -23,12 +24,20 @@ paymentAdminRoutes.get(
   }),
 );
 
+paymentAdminRoutes.get(
+  '/lesson-packages',
+  asyncHandler(async (_req, res) => {
+    const packages = await listLessonPackages();
+    res.json({ packages });
+  }),
+);
+
 paymentAdminRoutes.post(
   '/',
   asyncHandler(async (req, res) => {
     const input = createPaymentSchema.parse(req.body);
-    const payment = await createPayment(input);
-    res.status(201).json({ payment });
+    const result = await createPayment(input);
+    res.status(201).json(result);
   }),
 );
 

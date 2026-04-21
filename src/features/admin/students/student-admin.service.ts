@@ -1,8 +1,9 @@
-import { AccountStatus, Role } from '@prisma/client';
+import { AccountStatus, GenderPreference, Role } from '@prisma/client';
 import { AppError } from '../../../lib/http';
 import { prisma } from '../../../lib/prisma';
 import { createNotifications } from '../../notifications/notification.service';
 import type { AssignTeacherInput } from './student-admin.schemas';
+import type { CreateAdminStudentInput } from './student-admin.schemas';
 
 const studentInclude = {
   parent: {
@@ -38,6 +39,46 @@ export async function listStudents() {
   return prisma.student.findMany({
     include: studentInclude,
     orderBy: { createdAt: 'desc' },
+  });
+}
+
+export async function createAdminStudent(input: CreateAdminStudentInput) {
+  const parent = await prisma.parentProfile.findUnique({
+    where: { id: input.parentId },
+    include: { user: true },
+  });
+
+  if (!parent) {
+    throw new AppError(404, 'Parent not found');
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const student = await tx.student.create({
+      data: {
+        parentId: parent.id,
+        fullName: input.fullName.trim(),
+        age: input.age,
+        grade: input.grade,
+        gradeOther: input.gradeOther?.trim() || null,
+        school: input.school?.trim() || null,
+      },
+      include: studentInclude,
+    });
+
+    await createNotifications(
+      [
+        {
+          userId: parent.userId,
+          role: Role.PARENT,
+          title: 'Student profile created',
+          body: `Admin created ${student.fullName}'s profile. You can now complete or update the intake details.`,
+          studentId: student.id,
+        },
+      ],
+      tx,
+    );
+
+    return student;
   });
 }
 
@@ -115,6 +156,33 @@ export async function assignTeacherToStudent(
     );
   }
 
+  const preferredGender = student.intake?.teacherGenderPref;
+  if (
+    preferredGender &&
+    preferredGender !== GenderPreference.NO_PREFERENCE &&
+    teacher.gender !== null &&
+    teacher.gender !== undefined &&
+    String(teacher.gender) !== String(preferredGender)
+  ) {
+    const prefLabel =
+      preferredGender === GenderPreference.MALE ? 'male' : 'female';
+    throw new AppError(
+      400,
+      `${student.fullName}'s family asked for a ${prefLabel} teacher. ${teacher.user.name} does not match this preference.`,
+    );
+  }
+
+  if (
+    preferredGender &&
+    preferredGender !== GenderPreference.NO_PREFERENCE &&
+    !teacher.gender
+  ) {
+    throw new AppError(
+      400,
+      `${teacher.user.name} has not set their gender, which is needed to honor the family's teacher gender preference.`,
+    );
+  }
+
   return prisma.$transaction(async (tx) => {
     for (const assignmentSubject of subjectsToAssign) {
       await tx.studentSubjectAssignment.upsert({
@@ -128,9 +196,11 @@ export async function assignTeacherToStudent(
           studentId,
           teacherId: teacher.id,
           subject: assignmentSubject,
+          meetLink: input.meetLink?.trim() || null,
         },
         update: {
           teacherId: teacher.id,
+          ...(input.meetLink ? { meetLink: input.meetLink.trim() } : {}),
         },
       });
     }
