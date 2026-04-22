@@ -6,6 +6,7 @@ import { requireAuth, requireRole } from '../../middleware/auth';
 import {
   createSessionNoteSchema,
   createSessionProposalSchema,
+  reportContactAttemptSchema,
   requestCancellationSchema,
   updatePayoutAccountSchema,
   updateTeacherProfileSchema,
@@ -13,6 +14,7 @@ import {
 import {
   confirmTeacherAttendance,
   createSessionProposal,
+  reportTeacherContactAttempt,
   requestTeacherSessionCancellation,
   submitSessionNote,
   teacherPayouts,
@@ -111,6 +113,21 @@ teacherRoutes.post(
     const sessionId = getRouteParam(req.params.sessionId, 'session id');
     const input = createSessionNoteSchema.parse(req.body);
     const result = await submitSessionNote(
+      req.user!.id,
+      req.user!.role,
+      sessionId,
+      input,
+    );
+    res.status(201).json(result);
+  }),
+);
+
+teacherRoutes.post(
+  '/sessions/:sessionId/notes/contact-attempt',
+  asyncHandler(async (req, res) => {
+    const sessionId = getRouteParam(req.params.sessionId, 'session id');
+    const input = reportContactAttemptSchema.parse(req.body);
+    const result = await reportTeacherContactAttempt(
       req.user!.id,
       req.user!.role,
       sessionId,

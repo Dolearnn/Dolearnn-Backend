@@ -12,7 +12,9 @@ export const createAdminSessionSchema = z.object({
   startsAt: z
     .string()
     .datetime({ message: 'Start date must be an ISO datetime' }),
-  durationMins: z.coerce.number().int().min(15).max(240).default(60),
+  durationMins: z.coerce.number().int().default(60).refine((value) => value === 60, {
+    message: 'Sessions are 60 minutes',
+  }),
   meetLink: z
     .string()
     .trim()

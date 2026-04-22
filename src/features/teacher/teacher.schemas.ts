@@ -2,6 +2,15 @@ import { TeacherGender, TimeBlock } from '@prisma/client';
 import { Performance } from '@prisma/client';
 import { z } from 'zod';
 
+export const phoneNumberMessage =
+  'Do not include phone numbers in student feedback. Keep all communication inside the web app.';
+
+export function containsPhoneNumber(value?: string) {
+  if (!value) return false;
+  const candidates = value.match(/\+?\d[\d\s().-]{5,}\d/g) ?? [];
+  return candidates.some((candidate) => candidate.replace(/\D/g, '').length >= 7);
+}
+
 export const createSessionProposalSchema = z.object({
   studentId: z.string().min(1, 'Student is required'),
   subject: z.string().trim().min(1, 'Subject is required'),
@@ -19,6 +28,11 @@ export const createSessionNoteSchema = z.object({
   rating: z.coerce.number().int().min(1).max(5),
   focusNext: z.string().trim().min(2, 'Add what to focus on next'),
   concerns: z.string().trim().optional(),
+});
+
+export const reportContactAttemptSchema = z.object({
+  field: z.enum(['covered', 'focusNext', 'concerns']),
+  value: z.string().trim().max(80).optional(),
 });
 
 export const requestCancellationSchema = z.object({
@@ -46,6 +60,9 @@ export type CreateSessionProposalInput = z.infer<
   typeof createSessionProposalSchema
 >;
 export type CreateSessionNoteInput = z.infer<typeof createSessionNoteSchema>;
+export type ReportContactAttemptInput = z.infer<
+  typeof reportContactAttemptSchema
+>;
 export type RequestCancellationInput = z.infer<typeof requestCancellationSchema>;
 export type UpdatePayoutAccountInput = z.infer<
   typeof updatePayoutAccountSchema

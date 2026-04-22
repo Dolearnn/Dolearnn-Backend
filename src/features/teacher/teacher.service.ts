@@ -16,10 +16,12 @@ import {
 import type {
   CreateSessionNoteInput,
   CreateSessionProposalInput,
+  ReportContactAttemptInput,
   RequestCancellationInput,
   UpdatePayoutAccountInput,
   UpdateTeacherProfileInput,
 } from './teacher.schemas';
+import { containsPhoneNumber, phoneNumberMessage } from './teacher.schemas';
 
 const DAY_BY_INDEX: DayOfWeek[] = [
   DayOfWeek.SUN,
@@ -76,6 +78,22 @@ function isInsideBlock(date: Date, block: TimeBlock) {
   const range = TIME_BLOCK_RANGES[block];
   return minutes >= range.start && minutes < range.end;
 }
+
+function noteFieldsWithPhoneNumber(input: CreateSessionNoteInput) {
+  return [
+    ['what was covered', input.covered] as const,
+    ['focus next time', input.focusNext] as const,
+    ['concerns', input.concerns] as const,
+  ]
+    .filter(([, value]) => containsPhoneNumber(value))
+    .map(([field, value]) => ({ field, value: value?.trim() }));
+}
+
+const NOTE_FIELD_LABELS: Record<ReportContactAttemptInput['field'], string> = {
+  covered: 'what was covered',
+  focusNext: 'focus next time',
+  concerns: 'concerns',
+};
 
 type TeacherWithUser = Awaited<ReturnType<typeof getTeacherProfile>>;
 
@@ -366,6 +384,19 @@ export async function submitSessionNote(
     throw new AppError(400, 'Cannot add notes to a cancelled session');
   }
 
+  const flaggedFields = noteFieldsWithPhoneNumber(input);
+  if (flaggedFields.length > 0) {
+    await createAdminNotifications({
+      title: 'Teacher attempted off-platform contact',
+      body: `${teacher.user.name} tried to submit a phone number in feedback for ${session.student.fullName}'s ${session.subject} class. ${flaggedFields
+        .map((item) => `${item.field}: "${item.value}"`)
+        .join('; ')}.`,
+      studentId: session.studentId,
+      teacherId: teacher.id,
+    });
+    throw new AppError(400, phoneNumberMessage);
+  }
+
   const note = await prisma.$transaction(async (tx) => {
     const updatedNote = await tx.sessionNote.upsert({
       where: { sessionId: session.id },
@@ -403,6 +434,25 @@ export async function submitSessionNote(
   });
 
   return { note };
+}
+
+export async function reportTeacherContactAttempt(
+  userId: string,
+  role: Role,
+  sessionId: string,
+  input: ReportContactAttemptInput,
+) {
+  assertTeacher(role);
+  const { teacher, session } = await getOwnedSession(userId, sessionId);
+
+  await createAdminNotifications({
+    title: 'Teacher attempted off-platform contact',
+    body: `${teacher.user.name} typed a phone number in feedback for ${session.student.fullName}'s ${session.subject} class. Field: ${NOTE_FIELD_LABELS[input.field]}. Value: "${input.value?.trim() || 'not captured'}". The teacher was told this has been reported to admin.`,
+    studentId: session.studentId,
+    teacherId: teacher.id,
+  });
+
+  return { reported: true };
 }
 
 export async function requestTeacherSessionCancellation(

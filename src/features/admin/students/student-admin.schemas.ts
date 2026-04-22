@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { GradeLevel } from '@prisma/client';
+import { saveIntakeSchema } from '../../family/family.schemas';
 
 export const createAdminStudentSchema = z
   .object({
@@ -9,6 +10,7 @@ export const createAdminStudentSchema = z
     grade: z.nativeEnum(GradeLevel),
     gradeOther: z.string().trim().optional(),
     school: z.string().trim().optional(),
+    intake: saveIntakeSchema.optional(),
   })
   .refine((data) => data.grade !== GradeLevel.OTHER || !!data.gradeOther, {
     path: ['gradeOther'],

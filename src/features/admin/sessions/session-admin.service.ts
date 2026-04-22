@@ -243,6 +243,19 @@ export async function createAdminSession(input: CreateAdminSessionInput) {
   }
 
   return prisma.$transaction(async (tx) => {
+    const meetLink = input.meetLink?.trim() || assignment.meetLink;
+    if (input.meetLink?.trim()) {
+      await tx.studentSubjectAssignment.update({
+        where: {
+          studentId_subject: {
+            studentId: assignment.studentId,
+            subject,
+          },
+        },
+        data: { meetLink },
+      });
+    }
+
     const packageIds = await consumePaidSessions(
       assignment.student.parentId,
       assignment.studentId,
@@ -259,7 +272,7 @@ export async function createAdminSession(input: CreateAdminSessionInput) {
         subject,
         startsAt: new Date(input.startsAt),
         durationMins: input.durationMins,
-        meetLink: input.meetLink ?? assignment.meetLink,
+        meetLink,
         amount: assignment.teacher.hourlyRate,
       },
       include: sessionInclude,
@@ -318,11 +331,31 @@ export async function updateSessionMeetingLink(
   }
 
   return prisma.$transaction(async (tx) => {
-    const updatedSession = await tx.session.update({
-      where: { id: sessionId },
-      data: {
-        meetLink: input.meetLink.trim(),
+    const meetLink = input.meetLink.trim();
+
+    await tx.studentSubjectAssignment.updateMany({
+      where: {
+        studentId: session.studentId,
+        teacherId: session.teacherId,
+        subject: session.subject,
       },
+      data: { meetLink },
+    });
+
+    await tx.session.updateMany({
+      where: {
+        studentId: session.studentId,
+        teacherId: session.teacherId,
+        subject: session.subject,
+        status: { not: SessionStatus.CANCELLED },
+      },
+      data: {
+        meetLink,
+      },
+    });
+
+    const updatedSession = await tx.session.findUniqueOrThrow({
+      where: { id: sessionId },
       include: sessionInclude,
     });
 

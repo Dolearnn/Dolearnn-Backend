@@ -61,6 +61,26 @@ export async function createAdminStudent(input: CreateAdminStudentInput) {
         grade: input.grade,
         gradeOther: input.gradeOther?.trim() || null,
         school: input.school?.trim() || null,
+        intake: input.intake
+          ? {
+              create: {
+                subject: input.intake.subject.trim(),
+                subjects: input.intake.subjects.map((subject) => subject.trim()),
+                subjectOther: input.intake.subjectOther?.trim() || null,
+                learningGoal: input.intake.learningGoal,
+                currentLevel: input.intake.currentLevel,
+                specificTopics: input.intake.specificTopics?.trim() || null,
+                teacherGenderPref: input.intake.teacherGenderPref,
+                specialNotes: input.intake.specialNotes?.trim() || null,
+                timezone: input.intake.timezone,
+                sessionsPerWeek: input.intake.sessionsPerWeek,
+                budget: input.intake.budget,
+                schedule: {
+                  create: input.intake.schedule,
+                },
+              },
+            }
+          : undefined,
       },
       include: studentInclude,
     });
