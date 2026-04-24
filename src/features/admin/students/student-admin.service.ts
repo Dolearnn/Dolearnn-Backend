@@ -1,9 +1,18 @@
-import { AccountStatus, GenderPreference, Role } from '@prisma/client';
+import {
+  AccountStatus,
+  AuditAction,
+  AuditEntityType,
+  GenderPreference,
+  Prisma,
+  Role,
+} from '@prisma/client';
 import { AppError } from '../../../lib/http';
 import { prisma } from '../../../lib/prisma';
+import { createAuditLog, type AuditActor } from '../../audit/audit.service';
 import { createNotifications } from '../../notifications/notification.service';
 import type { AssignTeacherInput } from './student-admin.schemas';
 import type { CreateAdminStudentInput } from './student-admin.schemas';
+import type { ListStudentsQueryInput } from './student-admin.schemas';
 
 const studentInclude = {
   parent: {
@@ -35,14 +44,118 @@ const studentInclude = {
   },
 };
 
-export async function listStudents() {
+function subjectList(student: Awaited<ReturnType<typeof fetchStudents>>[number]) {
+  const intake = student.intake;
+  if (!intake) return [];
+
+  const subjects =
+    intake.subjects.length > 0
+      ? intake.subjects.map((subject) =>
+          subject === 'Other' && intake.subjectOther?.trim()
+            ? intake.subjectOther.trim()
+            : subject,
+        )
+      : [
+          intake.subject === 'Other' && intake.subjectOther?.trim()
+            ? intake.subjectOther.trim()
+            : intake.subject,
+        ];
+
+  return Array.from(
+    new Set(subjects.map((subject) => subject.trim()).filter(Boolean)),
+  );
+}
+
+function isFullyMatched(student: Awaited<ReturnType<typeof fetchStudents>>[number]) {
+  const subjects = subjectList(student);
+  if (subjects.length === 0) return false;
+
+  return subjects.every((subject) =>
+    student.subjectAssignments.some(
+      (assignment) => assignment.subject.toLowerCase() === subject.toLowerCase(),
+    ),
+  );
+}
+
+async function fetchStudents(where: Prisma.StudentWhereInput) {
   return prisma.student.findMany({
+    where,
     include: studentInclude,
     orderBy: { createdAt: 'desc' },
   });
 }
 
-export async function createAdminStudent(input: CreateAdminStudentInput) {
+export async function listStudents(input: ListStudentsQueryInput) {
+  const search = input.search?.trim();
+  const where = {
+    ...(input.hasIntake === undefined
+      ? {}
+      : {
+          intake: input.hasIntake ? { isNot: null } : { is: null },
+        }),
+    ...(search
+      ? {
+          OR: [
+            { fullName: { contains: search, mode: 'insensitive' as const } },
+            { school: { contains: search, mode: 'insensitive' as const } },
+            {
+              intake: {
+                is: {
+                  OR: [
+                    { subject: { contains: search, mode: 'insensitive' as const } },
+                    {
+                      subjectOther: {
+                        contains: search,
+                        mode: 'insensitive' as const,
+                      },
+                    },
+                    { subjects: { has: search } },
+                  ],
+                },
+              },
+            },
+          ],
+        }
+      : {}),
+  };
+
+  const students = await fetchStudents(where);
+  const decoratedStudents = students.map((student) => ({
+    student,
+    fullyMatched: isFullyMatched(student),
+  }));
+
+  const assignmentFiltered = decoratedStudents.filter(({ fullyMatched }) => {
+    if (input.assignmentStatus === 'PENDING') return !fullyMatched;
+    if (input.assignmentStatus === 'MATCHED') return fullyMatched;
+    return true;
+  });
+
+  const total = assignmentFiltered.length;
+  const start = (input.page - 1) * input.pageSize;
+  const end = start + input.pageSize;
+  const pagedStudents = assignmentFiltered.slice(start, end).map(({ student }) => student);
+
+  return {
+    students: pagedStudents,
+    pagination: {
+      page: input.page,
+      pageSize: input.pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / input.pageSize)),
+    },
+    summary: {
+      total: decoratedStudents.length,
+      pending: decoratedStudents.filter(({ fullyMatched }) => !fullyMatched).length,
+      matched: decoratedStudents.filter(({ fullyMatched }) => fullyMatched).length,
+    },
+  };
+}
+
+export async function createAdminStudent(
+  input: CreateAdminStudentInput,
+  actor: AuditActor,
+) {
   const parent = await prisma.parentProfile.findUnique({
     where: { id: input.parentId },
     include: { user: true },
@@ -98,20 +211,35 @@ export async function createAdminStudent(input: CreateAdminStudentInput) {
       tx,
     );
 
+    await createAuditLog(
+      {
+        actor,
+        action: AuditAction.STUDENT_CREATED,
+        entityType: AuditEntityType.STUDENT,
+        entityId: student.id,
+        summary: `${actor.email ?? 'Admin'} created student ${student.fullName}.`,
+        studentId: student.id,
+        metadata: {
+          parentId: parent.id,
+          fullName: student.fullName,
+          grade: student.grade,
+        },
+      },
+      tx,
+    );
+
     return student;
   });
 }
 
 export async function listPendingIntakes() {
-  return prisma.student.findMany({
-    where: {
-      intake: {
-        isNot: null,
-      },
-    },
-    include: studentInclude,
-    orderBy: { createdAt: 'desc' },
+  const result = await listStudents({
+    page: 1,
+    pageSize: 100,
+    hasIntake: true,
+    assignmentStatus: 'PENDING',
   });
+  return result.students;
 }
 
 export async function assignTeacherToStudent(

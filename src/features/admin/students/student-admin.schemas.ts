@@ -2,6 +2,14 @@ import { z } from 'zod';
 import { GradeLevel } from '@prisma/client';
 import { saveIntakeSchema } from '../../family/family.schemas';
 
+export const listStudentsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().trim().optional(),
+  hasIntake: z.coerce.boolean().optional(),
+  assignmentStatus: z.enum(['ALL', 'PENDING', 'MATCHED']).default('ALL'),
+});
+
 export const createAdminStudentSchema = z
   .object({
     parentId: z.string().min(1, 'Parent is required'),
@@ -25,3 +33,4 @@ export const assignTeacherSchema = z.object({
 
 export type AssignTeacherInput = z.infer<typeof assignTeacherSchema>;
 export type CreateAdminStudentInput = z.infer<typeof createAdminStudentSchema>;
+export type ListStudentsQueryInput = z.infer<typeof listStudentsQuerySchema>;

@@ -1,6 +1,13 @@
 import { TeacherGender } from '@prisma/client';
 import { z } from 'zod';
 
+export const listTeachersQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().trim().optional(),
+  status: z.enum(['ACTIVE', 'TERMINATED']).optional(),
+});
+
 export const createTeacherSchema = z.object({
   firstName: z.string().trim().min(2, 'First name is required'),
   lastName: z.string().trim().min(2, 'Last name is required'),
@@ -24,5 +31,6 @@ export const terminateTeacherSchema = z.object({
 });
 
 export type CreateTeacherInput = z.infer<typeof createTeacherSchema>;
+export type ListTeachersQueryInput = z.infer<typeof listTeachersQuerySchema>;
 export type UpdateTeacherRateInput = z.infer<typeof updateTeacherRateSchema>;
 export type TerminateTeacherInput = z.infer<typeof terminateTeacherSchema>;

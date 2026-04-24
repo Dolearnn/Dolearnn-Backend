@@ -1,12 +1,22 @@
-import { LessonPackageStatus, PayoutStatus, Role } from '@prisma/client';
+import {
+  AuditAction,
+  AuditEntityType,
+  LessonPackageStatus,
+  Prisma,
+  PayoutStatus,
+  Role,
+} from '@prisma/client';
 import { AppError } from '../../../lib/http';
 import { prisma } from '../../../lib/prisma';
+import { createAuditLog, type AuditActor } from '../../audit/audit.service';
 import {
   createNotification,
   createNotifications,
 } from '../../notifications/notification.service';
 import type {
   CreatePaymentInput,
+  ListLessonPackagesQueryInput,
+  ListPaymentsQueryInput,
   MarkPayoutPaidInput,
 } from './payment-admin.schemas';
 
@@ -33,29 +43,227 @@ export async function listParentsForPayments() {
 }
 
 export async function listPayments() {
-  return prisma.payment.findMany({
-    include: {
-      parent: {
-        include: { user: true },
+  const [payments, total, aggregates] = await Promise.all([
+    prisma.payment.findMany({
+      include: {
+        parent: {
+          include: { user: true },
+        },
       },
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.payment.count(),
+    prisma.payment.aggregate({
+      _sum: {
+        amount: true,
+        sessionsIncluded: true,
+        sessionsUsed: true,
+      },
+    }),
+  ]);
+
+  return {
+    payments,
+    pagination: {
+      page: 1,
+      pageSize: payments.length || 1,
+      total,
+      totalPages: 1,
     },
-    orderBy: { createdAt: 'desc' },
-  });
+    summary: {
+      total,
+      amount: asNumber(aggregates._sum.amount),
+      sessionsIncluded: aggregates._sum.sessionsIncluded ?? 0,
+      sessionsUsed: aggregates._sum.sessionsUsed ?? 0,
+    },
+  };
+}
+
+export async function listPaymentsPage(input: ListPaymentsQueryInput) {
+  const search = input.search?.trim();
+  const where: Prisma.PaymentWhereInput = search
+    ? {
+        OR: [
+          {
+            parent: {
+              user: {
+                name: { contains: search, mode: 'insensitive' },
+              },
+            },
+          },
+          {
+            parent: {
+              user: {
+                email: { contains: search, mode: 'insensitive' },
+              },
+            },
+          },
+        ],
+      }
+    : {};
+
+  const skip = (input.page - 1) * input.pageSize;
+  const [payments, total, aggregates] = await Promise.all([
+    prisma.payment.findMany({
+      where,
+      include: {
+        parent: {
+          include: { user: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: input.pageSize,
+    }),
+    prisma.payment.count({ where }),
+    prisma.payment.aggregate({
+      where,
+      _sum: {
+        amount: true,
+        sessionsIncluded: true,
+        sessionsUsed: true,
+      },
+    }),
+  ]);
+
+  return {
+    payments,
+    pagination: {
+      page: input.page,
+      pageSize: input.pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / input.pageSize)),
+    },
+    summary: {
+      total,
+      amount: asNumber(aggregates._sum.amount),
+      sessionsIncluded: aggregates._sum.sessionsIncluded ?? 0,
+      sessionsUsed: aggregates._sum.sessionsUsed ?? 0,
+    },
+  };
 }
 
 export async function listLessonPackages() {
-  return prisma.studentLessonPackage.findMany({
-    include: {
-      parent: {
-        include: { user: true },
+  const [packages, total, grouped] = await Promise.all([
+    prisma.studentLessonPackage.findMany({
+      include: {
+        parent: {
+          include: { user: true },
+        },
+        student: true,
       },
-      student: true,
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.studentLessonPackage.count(),
+    prisma.studentLessonPackage.groupBy({
+      by: ['status'],
+      _count: { _all: true },
+    }),
+  ]);
+
+  const counts = grouped.reduce<Record<string, number>>((acc, item) => {
+    acc[item.status] = item._count._all;
+    return acc;
+  }, {});
+
+  return {
+    packages,
+    pagination: {
+      page: 1,
+      pageSize: packages.length || 1,
+      total,
+      totalPages: 1,
     },
-    orderBy: { createdAt: 'desc' },
-  });
+    summary: {
+      total,
+      active: counts.ACTIVE ?? 0,
+      exhausted: counts.EXHAUSTED ?? 0,
+      cancelled: counts.CANCELLED ?? 0,
+    },
+  };
 }
 
-export async function createPayment(input: CreatePaymentInput) {
+export async function listLessonPackagesPage(
+  input: ListLessonPackagesQueryInput,
+) {
+  const search = input.search?.trim();
+  const where: Prisma.StudentLessonPackageWhereInput = {
+    ...(input.status !== 'ALL'
+      ? { status: input.status as LessonPackageStatus }
+      : {}),
+    ...(search
+      ? {
+          OR: [
+            {
+              parent: {
+                user: {
+                  name: { contains: search, mode: 'insensitive' },
+                },
+              },
+            },
+            {
+              parent: {
+                user: {
+                  email: { contains: search, mode: 'insensitive' },
+                },
+              },
+            },
+            {
+              student: {
+                fullName: { contains: search, mode: 'insensitive' },
+              },
+            },
+            { subject: { contains: search, mode: 'insensitive' } },
+          ],
+        }
+      : {}),
+  };
+
+  const skip = (input.page - 1) * input.pageSize;
+  const [packages, total, grouped] = await Promise.all([
+    prisma.studentLessonPackage.findMany({
+      where,
+      include: {
+        parent: {
+          include: { user: true },
+        },
+        student: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: input.pageSize,
+    }),
+    prisma.studentLessonPackage.count({ where }),
+    prisma.studentLessonPackage.groupBy({
+      by: ['status'],
+      where,
+      _count: { _all: true },
+    }),
+  ]);
+
+  const counts = grouped.reduce<Record<string, number>>((acc, item) => {
+    acc[item.status] = item._count._all;
+    return acc;
+  }, {});
+
+  return {
+    packages,
+    pagination: {
+      page: input.page,
+      pageSize: input.pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / input.pageSize)),
+    },
+    summary: {
+      total,
+      active: counts.ACTIVE ?? 0,
+      exhausted: counts.EXHAUSTED ?? 0,
+      cancelled: counts.CANCELLED ?? 0,
+    },
+  };
+}
+
+export async function createPayment(input: CreatePaymentInput, actor: AuditActor) {
   const [parent, student] = await Promise.all([
     prisma.parentProfile.findUnique({
       where: { id: input.parentId },
@@ -122,6 +330,26 @@ export async function createPayment(input: CreatePaymentInput) {
       tx,
     );
 
+    await createAuditLog(
+      {
+        actor,
+        action: AuditAction.PAYMENT_RECORDED,
+        entityType: AuditEntityType.PAYMENT,
+        entityId: payment.id,
+        summary: `${actor.email ?? 'Admin'} recorded a payment for ${student.fullName}.`,
+        studentId: student.id,
+        metadata: {
+          parentId: parent.id,
+          amount: input.amount,
+          subject: input.subject.trim(),
+          sessionsIncluded: input.sessionsIncluded,
+          gateway: input.gateway,
+          plan: input.plan,
+        },
+      },
+      tx,
+    );
+
     return { payment, lessonPackage };
   });
 }
@@ -182,7 +410,7 @@ export async function listPayoutSummaries(month = currentMonth()) {
   });
 }
 
-export async function markPayoutPaid(input: MarkPayoutPaidInput) {
+export async function markPayoutPaid(input: MarkPayoutPaidInput, actor: AuditActor) {
   const teacher = await prisma.teacherProfile.findUnique({
     where: { id: input.teacherId },
     include: { user: true },
@@ -228,6 +456,23 @@ export async function markPayoutPaid(input: MarkPayoutPaidInput) {
           teacherId: teacher.id,
         },
       ],
+      tx,
+    );
+
+    await createAuditLog(
+      {
+        actor,
+        action: AuditAction.PAYOUT_MARKED_PAID,
+        entityType: AuditEntityType.PAYOUT,
+        entityId: payout.id,
+        summary: `${actor.email ?? 'Admin'} marked ${teacher.user.name}'s ${input.month} payout as paid.`,
+        teacherId: teacher.id,
+        metadata: {
+          teacherId: teacher.id,
+          month: input.month,
+          amount,
+        },
+      },
       tx,
     );
 

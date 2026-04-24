@@ -133,6 +133,41 @@ enum LessonPackageStatus {
   CANCELLED
 }
 
+enum LeadSource {
+  WAITLIST
+  NEWSLETTER
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  ARCHIVED
+}
+
+enum AuditAction {
+  STUDENT_CREATED
+  PAYMENT_RECORDED
+  PAYOUT_MARKED_PAID
+  MEETING_LINK_UPDATED
+  CANCELLATION_APPROVED
+  CANCELLATION_REJECTED
+  TEACHER_RATE_UPDATED
+  TEACHER_TERMINATED
+  FAMILY_ATTENDANCE_CONFIRMED
+  TEACHER_ATTENDANCE_CONFIRMED
+}
+
+enum AuditEntityType {
+  STUDENT
+  PAYMENT
+  PAYOUT
+  SESSION
+  CANCELLATION
+  TEACHER
+  ATTENDANCE
+}
+
 model User {
   id           String        @id @default(cuid())
   email        String        @unique
@@ -149,6 +184,7 @@ model User {
   parentProfile  ParentProfile?
   teacherProfile TeacherProfile?
   notifications  Notification[]
+  auditLogs      AuditLog[]
 }
 
 model ParentProfile {
@@ -197,6 +233,7 @@ model TeacherProfile {
   notes            SessionNote[]
   payouts          TeacherPayout[]
   notifications    Notification[]    @relation("TeacherNotifications")
+  auditLogs        AuditLog[]        @relation("TeacherAuditLogs")
 }
 
 model Student {
@@ -223,6 +260,7 @@ model Student {
   lessonPackages  StudentLessonPackage[]
   proposals       SessionProposal[]
   notifications   Notification[]
+  auditLogs       AuditLog[]
   bookingRequests SessionBookingRequest[]
 }
 
@@ -453,4 +491,46 @@ model Notification {
   teacher TeacherProfile? @relation("TeacherNotifications", fields: [teacherId], references: [id], onDelete: SetNull)
 
   @@index([userId, read, createdAt])
+}
+
+model Lead {
+  id        String     @id @default(cuid())
+  source    LeadSource
+  status    LeadStatus @default(NEW)
+  fullName  String?
+  email     String
+  phone     String?
+  submissionCount Int  @default(1)
+  lastSubmittedAt DateTime @default(now())
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@unique([source, email])
+  @@index([source, status, createdAt])
+  @@index([status, createdAt])
+  @@index([email, createdAt])
+}
+
+model AuditLog {
+  id          String          @id @default(cuid())
+  actorUserId String
+  actorRole   Role
+  action      AuditAction
+  entityType  AuditEntityType
+  entityId    String
+  summary     String
+  metadata    Json?
+  studentId   String?
+  teacherId   String?
+  createdAt   DateTime        @default(now())
+
+  actor   User            @relation(fields: [actorUserId], references: [id], onDelete: Cascade)
+  student Student?        @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  teacher TeacherProfile? @relation("TeacherAuditLogs", fields: [teacherId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId, createdAt])
+  @@index([action, createdAt])
+  @@index([entityType, entityId, createdAt])
+  @@index([studentId, createdAt])
+  @@index([teacherId, createdAt])
 }

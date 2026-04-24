@@ -64,9 +64,12 @@ Useful commands:
 npm run prisma:generate
 npm run prisma:migrate
 npm run seed
+npm run reset-data
 npm run check-db
 npm run smoke
 ```
+
+`npm run reset-data` clears app data for local testing while preserving every admin login account. It removes leads, notifications, sessions, payments, students, parents, teachers, and other operational records, then prints the admin users left behind.
 
 `npm run smoke` runs a temporary end-to-end API check against the configured backend URL. It logs in as admin, creates a temporary teacher and family, creates a student intake, assigns the teacher, proposes and accepts a session, saves the meeting link, confirms attendance from both sides, submits a teacher note, verifies the family can see the completed session, and then cleans up the temporary records.
 

@@ -102,6 +102,7 @@ teacherRoutes.post(
       req.user!.id,
       req.user!.role,
       sessionId,
+      req.user!,
     );
     res.json(result);
   }),

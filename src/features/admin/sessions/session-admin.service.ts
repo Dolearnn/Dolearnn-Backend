@@ -1,4 +1,6 @@
 import {
+  AuditAction,
+  AuditEntityType,
   BookingRequestStatus,
   CancellationRequester,
   CancellationStatus,
@@ -9,12 +11,14 @@ import {
 } from '@prisma/client';
 import { AppError } from '../../../lib/http';
 import { prisma } from '../../../lib/prisma';
+import { createAuditLog, type AuditActor } from '../../audit/audit.service';
 import {
   createAdminNotifications,
   createNotifications,
 } from '../../notifications/notification.service';
 import type {
   CreateAdminSessionInput,
+  ListAdminSessionsQueryInput,
   UpdateMeetingLinkInput,
 } from './session-admin.schemas';
 
@@ -36,11 +40,77 @@ const sessionInclude = {
   },
 };
 
-export async function listAdminSessions() {
-  return prisma.session.findMany({
-    include: sessionInclude,
-    orderBy: { startsAt: 'desc' },
-  });
+export async function listAdminSessions(input?: ListAdminSessionsQueryInput) {
+  if (!input) {
+    return prisma.session.findMany({
+      include: sessionInclude,
+      orderBy: { startsAt: 'desc' },
+    });
+  }
+
+  const search = input.search?.trim();
+  const where: Prisma.SessionWhereInput = {
+    ...(input.status ? { status: input.status } : {}),
+    ...(search
+      ? {
+          OR: [
+            { subject: { contains: search, mode: 'insensitive' } },
+            {
+              student: {
+                fullName: { contains: search, mode: 'insensitive' },
+              },
+            },
+            {
+              teacher: {
+                user: {
+                  name: { contains: search, mode: 'insensitive' },
+                },
+              },
+            },
+          ],
+        }
+      : {}),
+  };
+
+  const skip = (input.page - 1) * input.pageSize;
+  const [sessions, total, grouped] = await Promise.all([
+    prisma.session.findMany({
+      where,
+      include: sessionInclude,
+      orderBy: { startsAt: 'desc' },
+      skip,
+      take: input.pageSize,
+    }),
+    prisma.session.count({ where }),
+    prisma.session.groupBy({
+      by: ['status'],
+      _count: { _all: true },
+    }),
+  ]);
+
+  const counts = grouped.reduce<Record<string, number>>((acc, item) => {
+    acc[item.status] = item._count._all;
+    return acc;
+  }, {});
+
+  return {
+    sessions,
+    pagination: {
+      page: input.page,
+      pageSize: input.pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / input.pageSize)),
+    },
+    summary: {
+      total:
+        (counts.UPCOMING ?? 0) +
+        (counts.COMPLETED ?? 0) +
+        (counts.CANCELLED ?? 0),
+      upcoming: counts.UPCOMING ?? 0,
+      completed: counts.COMPLETED ?? 0,
+      cancelled: counts.CANCELLED ?? 0,
+    },
+  };
 }
 
 export async function listBookingRequests() {
@@ -319,6 +389,7 @@ export async function createAdminSession(input: CreateAdminSessionInput) {
 export async function updateSessionMeetingLink(
   sessionId: string,
   input: UpdateMeetingLinkInput,
+  actor: AuditActor,
 ) {
   const session = await prisma.session.findUnique({ where: { id: sessionId } });
 
@@ -381,6 +452,24 @@ export async function updateSessionMeetingLink(
       tx,
     );
 
+    await createAuditLog(
+      {
+        actor,
+        action: AuditAction.MEETING_LINK_UPDATED,
+        entityType: AuditEntityType.SESSION,
+        entityId: updatedSession.id,
+        summary: `${actor.email ?? 'Admin'} updated the meeting link for ${updatedSession.subject} with ${updatedSession.student.fullName}.`,
+        studentId: updatedSession.studentId,
+        teacherId: updatedSession.teacherId,
+        metadata: {
+          sessionId: updatedSession.id,
+          subject: updatedSession.subject,
+          meetLink,
+        },
+      },
+      tx,
+    );
+
     return updatedSession;
   });
 }
@@ -425,7 +514,10 @@ async function getCancellationRequest(requestId: string) {
   return request;
 }
 
-export async function approveCancellationRequest(requestId: string) {
+export async function approveCancellationRequest(
+  requestId: string,
+  actor: AuditActor,
+) {
   const request = await getCancellationRequest(requestId);
 
   return prisma.$transaction(async (tx) => {
@@ -487,11 +579,32 @@ export async function approveCancellationRequest(requestId: string) {
       tx,
     );
 
+    await createAuditLog(
+      {
+        actor,
+        action: AuditAction.CANCELLATION_APPROVED,
+        entityType: AuditEntityType.CANCELLATION,
+        entityId: cancellation.id,
+        summary: `${actor.email ?? 'Admin'} approved a ${request.requestedBy === CancellationRequester.FAMILY ? 'family cancellation' : 'teacher reschedule'} request for ${request.session.subject} with ${request.session.student.fullName}.`,
+        studentId: request.session.studentId,
+        teacherId: request.session.teacherId,
+        metadata: {
+          sessionId: request.sessionId,
+          requestedBy: request.requestedBy,
+          reason: request.reason,
+        },
+      },
+      tx,
+    );
+
     return { cancellation, session };
   });
 }
 
-export async function rejectCancellationRequest(requestId: string) {
+export async function rejectCancellationRequest(
+  requestId: string,
+  actor: AuditActor,
+) {
   const request = await getCancellationRequest(requestId);
 
   const cancellation = await prisma.$transaction(async (tx) => {
@@ -554,6 +667,24 @@ export async function rejectCancellationRequest(requestId: string) {
         body: `Admin rejected a ${request.requestedBy === CancellationRequester.FAMILY ? 'family cancellation' : 'teacher reschedule'} request for ${request.session.subject} with ${request.session.student.fullName}.`,
         studentId: request.session.studentId,
         teacherId: request.session.teacherId,
+      },
+      tx,
+    );
+
+    await createAuditLog(
+      {
+        actor,
+        action: AuditAction.CANCELLATION_REJECTED,
+        entityType: AuditEntityType.CANCELLATION,
+        entityId: updatedCancellation.id,
+        summary: `${actor.email ?? 'Admin'} rejected a ${request.requestedBy === CancellationRequester.FAMILY ? 'family cancellation' : 'teacher reschedule'} request for ${request.session.subject} with ${request.session.student.fullName}.`,
+        studentId: request.session.studentId,
+        teacherId: request.session.teacherId,
+        metadata: {
+          sessionId: request.sessionId,
+          requestedBy: request.requestedBy,
+          reason: request.reason,
+        },
       },
       tx,
     );

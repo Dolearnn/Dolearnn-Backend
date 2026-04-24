@@ -1,6 +1,10 @@
 import { Router } from 'express';
 import { AppError, asyncHandler } from '../../../lib/http';
-import { assignTeacherSchema, createAdminStudentSchema } from './student-admin.schemas';
+import {
+  assignTeacherSchema,
+  createAdminStudentSchema,
+  listStudentsQuerySchema,
+} from './student-admin.schemas';
 import {
   assignTeacherToStudent,
   createAdminStudent,
@@ -20,9 +24,10 @@ function getRouteParam(value: string | string[], name: string) {
 
 studentAdminRoutes.get(
   '/',
-  asyncHandler(async (_req, res) => {
-    const students = await listStudents();
-    res.json({ students });
+  asyncHandler(async (req, res) => {
+    const input = listStudentsQuerySchema.parse(req.query);
+    const result = await listStudents(input);
+    res.json(result);
   }),
 );
 
@@ -30,7 +35,7 @@ studentAdminRoutes.post(
   '/',
   asyncHandler(async (req, res) => {
     const input = createAdminStudentSchema.parse(req.body);
-    const student = await createAdminStudent(input);
+    const student = await createAdminStudent(input, req.user!);
     res.status(201).json({ student });
   }),
 );

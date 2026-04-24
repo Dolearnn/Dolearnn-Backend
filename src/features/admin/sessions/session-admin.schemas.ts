@@ -1,10 +1,21 @@
 import { z } from 'zod';
+import { SessionStatus } from '@prisma/client';
+
+export const listAdminSessionsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().trim().optional(),
+  status: z.nativeEnum(SessionStatus).optional(),
+});
 
 export const updateMeetingLinkSchema = z.object({
   meetLink: z.string().trim().url('Valid meeting link is required'),
 });
 
 export type UpdateMeetingLinkInput = z.infer<typeof updateMeetingLinkSchema>;
+export type ListAdminSessionsQueryInput = z.infer<
+  typeof listAdminSessionsQuerySchema
+>;
 
 export const createAdminSessionSchema = z.object({
   studentId: z.string().min(1),

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { AppError, asyncHandler } from '../../../lib/http';
 import {
   createAdminSessionSchema,
+  listAdminSessionsQuerySchema,
   updateMeetingLinkSchema,
 } from './session-admin.schemas';
 import {
@@ -26,9 +27,16 @@ function getRouteParam(value: string | string[], name: string) {
 
 sessionAdminRoutes.get(
   '/',
-  asyncHandler(async (_req, res) => {
-    const sessions = await listAdminSessions();
-    res.json({ sessions });
+  asyncHandler(async (req, res) => {
+    const hasQuery = Object.keys(req.query).length > 0;
+    const result = hasQuery
+      ? await listAdminSessions(listAdminSessionsQuerySchema.parse(req.query))
+      : await listAdminSessions();
+    if (Array.isArray(result)) {
+      res.json({ sessions: result });
+      return;
+    }
+    res.json(result);
   }),
 );
 
@@ -46,7 +54,7 @@ sessionAdminRoutes.patch(
   asyncHandler(async (req, res) => {
     const sessionId = getRouteParam(req.params.sessionId, 'session id');
     const input = updateMeetingLinkSchema.parse(req.body);
-    const session = await updateSessionMeetingLink(sessionId, input);
+    const session = await updateSessionMeetingLink(sessionId, input, req.user!);
     res.json({ session });
   }),
 );
@@ -80,7 +88,7 @@ sessionAdminRoutes.post(
   '/cancellations/:requestId/approve',
   asyncHandler(async (req, res) => {
     const requestId = getRouteParam(req.params.requestId, 'request id');
-    const result = await approveCancellationRequest(requestId);
+    const result = await approveCancellationRequest(requestId, req.user!);
     res.json(result);
   }),
 );
@@ -89,7 +97,7 @@ sessionAdminRoutes.post(
   '/cancellations/:requestId/reject',
   asyncHandler(async (req, res) => {
     const requestId = getRouteParam(req.params.requestId, 'request id');
-    const result = await rejectCancellationRequest(requestId);
+    const result = await rejectCancellationRequest(requestId, req.user!);
     res.json(result);
   }),
 );

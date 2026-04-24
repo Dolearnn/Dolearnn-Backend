@@ -1,4 +1,6 @@
 import {
+  AuditAction,
+  AuditEntityType,
   AccountStatus,
   BookingRequestStatus,
   CancellationRequester,
@@ -12,6 +14,7 @@ import {
 } from '@prisma/client';
 import { AppError } from '../../lib/http';
 import { prisma } from '../../lib/prisma';
+import { createAuditLog, type AuditActor } from '../audit/audit.service';
 import {
   createAdminNotifications,
   createNotification,
@@ -626,6 +629,7 @@ export async function confirmFamilyAttendance(
   userId: string,
   role: Role,
   sessionId: string,
+  actor: AuditActor,
 ) {
   assertParent(role);
   const session = await getOwnedSession(userId, sessionId);
@@ -664,6 +668,25 @@ export async function confirmFamilyAttendance(
         },
       });
     }
+
+    await createAuditLog(
+      {
+        actor,
+        action: AuditAction.FAMILY_ATTENDANCE_CONFIRMED,
+        entityType: AuditEntityType.ATTENDANCE,
+        entityId: attendance.id,
+        summary: `${actor.email ?? 'Family'} confirmed attendance for ${session.subject} with ${session.teacher.user.name}.`,
+        studentId: session.studentId,
+        teacherId: session.teacherId,
+        metadata: {
+          sessionId: session.id,
+          statusAfterConfirmation: updatedSession.status,
+          familyConfirmedAt: attendance.familyConfirmedAt?.toISOString() ?? null,
+          teacherConfirmedAt: attendance.teacherConfirmedAt?.toISOString() ?? null,
+        },
+      },
+      tx,
+    );
 
     return { session: updatedSession, attendance };
   });
