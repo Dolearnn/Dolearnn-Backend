@@ -206,6 +206,7 @@ model TeacherProfile {
   userId            String        @unique
   firstName         String
   lastName          String
+  timezone          String        @default("Africa/Lagos")
   phoneCountry      String?
   phoneNumber       String?
   gender            TeacherGender?
@@ -287,6 +288,7 @@ model SessionBookingRequest {
   subject           String
   day               DayOfWeek
   timeBlock         TimeBlock
+  timezone          String               @default("UTC")
   startTime         String
   startDate         DateTime
   sessionsRequested Int

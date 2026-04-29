@@ -95,7 +95,11 @@ const studentInclude = {
 };
 
 const sessionInclude = {
-  student: true,
+  student: {
+    include: {
+      intake: true,
+    },
+  },
   teacher: {
     include: { user: true },
   },
@@ -225,7 +229,16 @@ export async function listBookingRequests(userId: string, role: Role) {
   return prisma.sessionBookingRequest.findMany({
     where: { parentId: parent.id },
     include: {
-      student: true,
+      student: {
+        include: {
+          intake: true,
+          subjectAssignments: {
+            include: {
+              teacher: true,
+            },
+          },
+        },
+      },
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -584,6 +597,7 @@ export async function createBookingRequest(
         subject,
         day: input.day,
         timeBlock: input.timeBlock,
+        timezone: student.intake?.timezone ?? 'UTC',
         startTime: input.startTime,
         startDate,
         sessionsRequested: input.sessionsRequested,

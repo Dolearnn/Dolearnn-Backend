@@ -5,12 +5,15 @@ import { OAuth2Client } from 'google-auth-library';
 import { env } from '../../config/env';
 import { AppError } from '../../lib/http';
 import { prisma } from '../../lib/prisma';
+import { sendEmail } from '../../lib/email';
 import { createAdminNotifications } from '../notifications/notification.service';
 import type {
   ChangePasswordInput,
+  ForgotPasswordInput,
   GoogleAuthInput,
   LoginInput,
   RegisterInput,
+  ResetPasswordInput,
 } from './auth.schemas';
 
 const googleClient = new OAuth2Client();
@@ -41,6 +44,53 @@ function signToken(user: Pick<User, 'id' | 'email' | 'role'>) {
       subject: user.id,
     },
   );
+}
+
+type ResetPasswordPayload = {
+  purpose: 'reset-password';
+  email: string;
+};
+
+function resetPasswordLink(token: string) {
+  return `${env.FRONTEND_URL.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(token)}`;
+}
+
+function signResetPasswordToken(user: Pick<User, 'id' | 'email'>) {
+  return jwt.sign(
+    {
+      purpose: 'reset-password',
+      email: user.email,
+    } satisfies ResetPasswordPayload,
+    jwtSecret(),
+    {
+      subject: user.id,
+      expiresIn: `${env.RESET_PASSWORD_EXPIRES_IN_MINUTES}m`,
+    },
+  );
+}
+
+function verifyResetPasswordToken(token: string) {
+  let decoded: string | jwt.JwtPayload;
+
+  try {
+    decoded = jwt.verify(token, jwtSecret());
+  } catch {
+    throw new AppError(401, 'This reset link is invalid or has expired');
+  }
+
+  if (
+    typeof decoded === 'string' ||
+    decoded.purpose !== 'reset-password' ||
+    !decoded.sub ||
+    !decoded.email
+  ) {
+    throw new AppError(401, 'This reset link is invalid or has expired');
+  }
+
+  return {
+    userId: decoded.sub,
+    email: decoded.email,
+  };
 }
 
 function publicUser(user: Pick<User, 'id' | 'email' | 'name' | 'role' | 'status' | 'authProvider' | 'mustChangePassword'>) {
@@ -252,6 +302,49 @@ export async function changePassword(userId: string, input: ChangePasswordInput)
     data: {
       passwordHash,
       mustChangePassword: false,
+    },
+  });
+
+  return authResponse(updated);
+}
+
+export async function forgotPassword(input: ForgotPasswordInput) {
+  const email = normalizeEmail(input.email);
+  const user = await prisma.user.findUnique({ where: { email } });
+
+  if (!user || user.status !== AccountStatus.ACTIVE) {
+    return;
+  }
+
+  const token = signResetPasswordToken(user);
+  const link = resetPasswordLink(token);
+
+  await sendEmail({
+    to: user.email,
+    subject: 'Reset your DoLearn password',
+    text: `We received a request to reset your DoLearn password. Open this link within ${env.RESET_PASSWORD_EXPIRES_IN_MINUTES} minutes: ${link}`,
+    html: `<p>We received a request to reset your DoLearn password.</p><p><a href="${link}">Reset your password</a></p><p>This link expires in ${env.RESET_PASSWORD_EXPIRES_IN_MINUTES} minutes.</p>`,
+  });
+}
+
+export async function resetPassword(input: ResetPasswordInput) {
+  const payload = verifyResetPasswordToken(input.token);
+  const user = await prisma.user.findUnique({ where: { id: payload.userId } });
+
+  if (!user || normalizeEmail(user.email) !== normalizeEmail(payload.email)) {
+    throw new AppError(401, 'This reset link is invalid or has expired');
+  }
+
+  assertActive(user);
+
+  const passwordHash = await bcrypt.hash(input.newPassword, 12);
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordHash,
+      mustChangePassword: false,
+      authProvider:
+        user.authProvider === AuthProvider.GOOGLE ? AuthProvider.BOTH : user.authProvider,
     },
   });
 

@@ -48,6 +48,7 @@ export const updatePayoutAccountSchema = z.object({
 export const updateTeacherProfileSchema = z.object({
   firstName: z.string().trim().min(1, 'First name is required').optional(),
   lastName: z.string().trim().min(1, 'Last name is required').optional(),
+  timezone: z.string().trim().min(1, 'Timezone is required').optional(),
   bio: z.string().trim().max(1000).optional().or(z.literal('')),
   phoneCountry: z.string().trim().max(10).optional().or(z.literal('')),
   phoneNumber: z.string().trim().max(30).optional().or(z.literal('')),

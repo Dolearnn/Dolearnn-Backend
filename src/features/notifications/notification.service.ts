@@ -1,6 +1,7 @@
 import { Role, type Prisma } from '@prisma/client';
 import { AppError } from '../../lib/http';
 import { prisma } from '../../lib/prisma';
+import { sendBulkEmail } from '../../lib/email';
 
 type NotificationClient = Prisma.TransactionClient | typeof prisma;
 
@@ -52,11 +53,11 @@ export async function createAdminNotifications(
   client: NotificationClient = prisma,
 ) {
   const admins = await client.user.findMany({
-    where: { role: Role.ADMIN },
-    select: { id: true, role: true },
+    where: { role: Role.ADMIN, status: 'ACTIVE' },
+    select: { id: true, role: true, email: true, name: true },
   });
 
-  return createNotifications(
+  const result = await createNotifications(
     admins.map((admin) => ({
       userId: admin.id,
       role: admin.role,
@@ -67,6 +68,19 @@ export async function createAdminNotifications(
     })),
     client,
   );
+
+  void sendBulkEmail(
+    admins.map((admin) => ({
+      to: admin.email,
+      subject: `DoLearn admin alert: ${input.title}`,
+      text: `Hello ${admin.name},\n\n${input.body}\n\nSign in to the admin dashboard for more details.`,
+      html: `<p>Hello ${admin.name},</p><p>${input.body}</p><p>Sign in to the admin dashboard for more details.</p>`,
+    })),
+  ).catch((error) => {
+    console.error('Could not send admin email notifications', error);
+  });
+
+  return result;
 }
 
 export function listNotifications(userId: string) {

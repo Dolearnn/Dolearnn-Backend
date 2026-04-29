@@ -3,16 +3,20 @@ import { asyncHandler } from '../../lib/http';
 import { requireAuth } from '../../middleware/auth';
 import {
   changePasswordSchema,
+  forgotPasswordSchema,
   googleAuthSchema,
   loginSchema,
+  resetPasswordSchema,
   registerSchema,
 } from './auth.schemas';
 import {
   changePassword,
   currentUser,
+  forgotPassword,
   loginOrRegisterWithGoogle,
   loginWithPassword,
   registerParent,
+  resetPassword,
 } from './auth.service';
 
 export const authRoutes = Router();
@@ -59,6 +63,24 @@ authRoutes.post(
   asyncHandler(async (req, res) => {
     const input = changePasswordSchema.parse(req.body);
     const result = await changePassword(req.user!.id, input);
+    res.json(result);
+  }),
+);
+
+authRoutes.post(
+  '/forgot-password',
+  asyncHandler(async (req, res) => {
+    const input = forgotPasswordSchema.parse(req.body);
+    await forgotPassword(input);
+    res.status(204).send();
+  }),
+);
+
+authRoutes.post(
+  '/reset-password',
+  asyncHandler(async (req, res) => {
+    const input = resetPasswordSchema.parse(req.body);
+    const result = await resetPassword(input);
     res.json(result);
   }),
 );

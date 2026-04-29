@@ -35,6 +35,7 @@ function displayTeacher(
     firstName: teacher.firstName,
     lastName: teacher.lastName,
     email: teacher.user.email,
+    timezone: teacher.timezone,
     phoneCountry: teacher.phoneCountry,
     phoneNumber: teacher.phoneNumber,
     gender: teacher.gender,
@@ -179,6 +180,7 @@ export async function createTeacher(input: CreateTeacherInput) {
         create: {
           firstName: input.firstName.trim(),
           lastName: input.lastName.trim(),
+          timezone: input.timezone.trim(),
           phoneCountry: input.phoneCountry?.trim() || null,
           phoneNumber: input.phoneNumber?.trim() || null,
           gender: input.gender,

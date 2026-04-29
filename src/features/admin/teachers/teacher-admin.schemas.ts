@@ -12,6 +12,7 @@ export const createTeacherSchema = z.object({
   firstName: z.string().trim().min(2, 'First name is required'),
   lastName: z.string().trim().min(2, 'Last name is required'),
   email: z.string().trim().email('Valid email is required'),
+  timezone: z.string().trim().min(1, 'Timezone is required').default('Africa/Lagos'),
   phoneCountry: z.string().trim().optional(),
   phoneNumber: z.string().trim().optional(),
   gender: z.nativeEnum(TeacherGender),

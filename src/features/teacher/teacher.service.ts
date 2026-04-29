@@ -106,6 +106,7 @@ function serializeTeacher(teacher: TeacherWithUser) {
     userId: teacher.userId,
     name: teacher.user.name,
     email: teacher.user.email,
+    timezone: teacher.timezone,
     firstName: teacher.firstName,
     lastName: teacher.lastName,
     phoneCountry: teacher.phoneCountry,
@@ -169,6 +170,8 @@ export async function updateTeacherProfile(
     teacherData.firstName = input.firstName.trim();
   if (input.lastName !== undefined)
     teacherData.lastName = input.lastName.trim();
+  if (input.timezone !== undefined)
+    teacherData.timezone = input.timezone.trim();
   if (input.bio !== undefined) teacherData.bio = trimOrNull(input.bio);
   if (input.phoneCountry !== undefined)
     teacherData.phoneCountry = trimOrNull(input.phoneCountry);

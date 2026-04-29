@@ -11,6 +11,7 @@ import {
 } from '@prisma/client';
 import { AppError } from '../../../lib/http';
 import { prisma } from '../../../lib/prisma';
+import { zonedLocalDateTimeToUtc } from '../../../lib/timezones';
 import { createAuditLog, type AuditActor } from '../../audit/audit.service';
 import {
   createAdminNotifications,
@@ -25,6 +26,7 @@ import type {
 const sessionInclude = {
   student: {
     include: {
+      intake: true,
       parent: {
         include: { user: true },
       },
@@ -118,7 +120,17 @@ export async function listBookingRequests() {
     include: {
       student: {
         include: {
+          intake: true,
           parent: { include: { user: true } },
+          subjectAssignments: {
+            include: {
+              teacher: {
+                include: {
+                  user: true,
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -126,11 +138,18 @@ export async function listBookingRequests() {
   });
 }
 
-function dateWithTime(date: Date, time: string) {
+function dateWithTime(date: Date, time: string, timeZone: string) {
   const [hours, minutes] = time.split(':').map(Number);
-  const next = new Date(date);
-  next.setUTCHours(hours, minutes, 0, 0);
-  return next;
+  return zonedLocalDateTimeToUtc(
+    {
+      year: date.getUTCFullYear(),
+      month: date.getUTCMonth() + 1,
+      day: date.getUTCDate(),
+      hour: hours,
+      minute: minutes,
+    },
+    timeZone,
+  );
 }
 
 async function consumePaidSessions(
@@ -184,7 +203,11 @@ export async function scheduleBookingRequest(requestId: string) {
     where: { id: requestId },
     include: {
       parent: { include: { user: true } },
-      student: true,
+      student: {
+        include: {
+          intake: true,
+        },
+      },
     },
   });
 
@@ -234,7 +257,7 @@ export async function scheduleBookingRequest(requestId: string) {
             teacherId: assignment.teacherId,
             lessonPackageId: packageIds[index],
             subject: request.subject,
-            startsAt: dateWithTime(date, request.startTime),
+            startsAt: dateWithTime(date, request.startTime, request.timezone),
             durationMins: 60,
             meetLink: assignment.meetLink,
             amount: assignment.teacher.hourlyRate,

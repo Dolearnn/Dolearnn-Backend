@@ -58,6 +58,18 @@ CREATE TYPE "BookingRequestStatus" AS ENUM ('PENDING', 'SCHEDULED', 'CANCELLED')
 -- CreateEnum
 CREATE TYPE "LessonPackageStatus" AS ENUM ('ACTIVE', 'EXHAUSTED', 'CANCELLED');
 
+-- CreateEnum
+CREATE TYPE "LeadSource" AS ENUM ('WAITLIST', 'NEWSLETTER');
+
+-- CreateEnum
+CREATE TYPE "LeadStatus" AS ENUM ('NEW', 'CONTACTED', 'QUALIFIED', 'ARCHIVED');
+
+-- CreateEnum
+CREATE TYPE "AuditAction" AS ENUM ('STUDENT_CREATED', 'PAYMENT_RECORDED', 'PAYOUT_MARKED_PAID', 'MEETING_LINK_UPDATED', 'CANCELLATION_APPROVED', 'CANCELLATION_REJECTED', 'TEACHER_RATE_UPDATED', 'TEACHER_TERMINATED', 'FAMILY_ATTENDANCE_CONFIRMED', 'TEACHER_ATTENDANCE_CONFIRMED');
+
+-- CreateEnum
+CREATE TYPE "AuditEntityType" AS ENUM ('STUDENT', 'PAYMENT', 'PAYOUT', 'SESSION', 'CANCELLATION', 'TEACHER', 'ATTENDANCE');
+
 -- CreateTable
 CREATE TABLE "User" (
     "id" TEXT NOT NULL,
@@ -92,6 +104,7 @@ CREATE TABLE "TeacherProfile" (
     "userId" TEXT NOT NULL,
     "firstName" TEXT NOT NULL,
     "lastName" TEXT NOT NULL,
+    "timezone" TEXT NOT NULL DEFAULT 'Africa/Lagos',
     "phoneCountry" TEXT,
     "phoneNumber" TEXT,
     "gender" "TeacherGender",
@@ -154,6 +167,7 @@ CREATE TABLE "SessionBookingRequest" (
     "subject" TEXT NOT NULL,
     "day" "DayOfWeek" NOT NULL,
     "timeBlock" "TimeBlock" NOT NULL,
+    "timezone" TEXT NOT NULL DEFAULT 'UTC',
     "startTime" TEXT NOT NULL,
     "startDate" TIMESTAMP(3) NOT NULL,
     "sessionsRequested" INTEGER NOT NULL,
@@ -351,6 +365,39 @@ CREATE TABLE "Notification" (
     CONSTRAINT "Notification_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "Lead" (
+    "id" TEXT NOT NULL,
+    "source" "LeadSource" NOT NULL,
+    "status" "LeadStatus" NOT NULL DEFAULT 'NEW',
+    "fullName" TEXT,
+    "email" TEXT NOT NULL,
+    "phone" TEXT,
+    "submissionCount" INTEGER NOT NULL DEFAULT 1,
+    "lastSubmittedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Lead_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AuditLog" (
+    "id" TEXT NOT NULL,
+    "actorUserId" TEXT NOT NULL,
+    "actorRole" "Role" NOT NULL,
+    "action" "AuditAction" NOT NULL,
+    "entityType" "AuditEntityType" NOT NULL,
+    "entityId" TEXT NOT NULL,
+    "summary" TEXT NOT NULL,
+    "metadata" JSONB,
+    "studentId" TEXT,
+    "teacherId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AuditLog_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
@@ -389,6 +436,33 @@ CREATE UNIQUE INDEX "TeacherPayout_teacherId_month_key" ON "TeacherPayout"("teac
 
 -- CreateIndex
 CREATE INDEX "Notification_userId_read_createdAt_idx" ON "Notification"("userId", "read", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "Lead_source_status_createdAt_idx" ON "Lead"("source", "status", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "Lead_status_createdAt_idx" ON "Lead"("status", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "Lead_email_createdAt_idx" ON "Lead"("email", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Lead_source_email_key" ON "Lead"("source", "email");
+
+-- CreateIndex
+CREATE INDEX "AuditLog_actorUserId_createdAt_idx" ON "AuditLog"("actorUserId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "AuditLog_action_createdAt_idx" ON "AuditLog"("action", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "AuditLog_entityType_entityId_createdAt_idx" ON "AuditLog"("entityType", "entityId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "AuditLog_studentId_createdAt_idx" ON "AuditLog"("studentId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "AuditLog_teacherId_createdAt_idx" ON "AuditLog"("teacherId", "createdAt");
 
 -- AddForeignKey
 ALTER TABLE "ParentProfile" ADD CONSTRAINT "ParentProfile_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -473,3 +547,12 @@ ALTER TABLE "Notification" ADD CONSTRAINT "Notification_studentId_fkey" FOREIGN 
 
 -- AddForeignKey
 ALTER TABLE "Notification" ADD CONSTRAINT "Notification_teacherId_fkey" FOREIGN KEY ("teacherId") REFERENCES "TeacherProfile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_actorUserId_fkey" FOREIGN KEY ("actorUserId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "Student"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_teacherId_fkey" FOREIGN KEY ("teacherId") REFERENCES "TeacherProfile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
