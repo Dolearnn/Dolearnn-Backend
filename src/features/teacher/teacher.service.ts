@@ -11,6 +11,10 @@ import {
 } from '@prisma/client';
 import { AppError } from '../../lib/http';
 import { prisma } from '../../lib/prisma';
+import {
+  assertStudentHasNoSchedulingConflict,
+  assertTeacherHasNoSchedulingConflict,
+} from '../../lib/session-conflicts';
 import { createAuditLog, type AuditActor } from '../audit/audit.service';
 import {
   createAdminNotifications,
@@ -598,6 +602,19 @@ export async function createSessionProposal(
   }
 
   return prisma.$transaction(async (tx) => {
+    await assertTeacherHasNoSchedulingConflict(
+      tx,
+      teacher.id,
+      input.startsAt,
+      input.durationMins,
+    );
+    await assertStudentHasNoSchedulingConflict(
+      tx,
+      student.id,
+      input.startsAt,
+      input.durationMins,
+    );
+
     const proposal = await tx.sessionProposal.create({
       data: {
         studentId: student.id,

@@ -12,6 +12,10 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(24).optional(),
   JWT_EXPIRES_IN: z.string().default('7d'),
   RESET_PASSWORD_EXPIRES_IN_MINUTES: z.coerce.number().int().positive().default(30),
+  ENABLE_API_DOCS: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((value) => value === 'true'),
   GOOGLE_CLIENT_ID: z.string().min(1).optional(),
   EMAIL_PROVIDER: z.enum(['resend', 'sendgrid']).optional(),
   EMAIL_FROM_EMAIL: z.string().email().optional(),

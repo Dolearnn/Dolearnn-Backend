@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { GradeLevel } from '@prisma/client';
 import { saveIntakeSchema } from '../../family/family.schemas';
+import { safeMeetingLinkSchema } from '../../../lib/urls';
 
 export const listStudentsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -28,7 +29,7 @@ export const createAdminStudentSchema = z
 export const assignTeacherSchema = z.object({
   teacherId: z.string().min(1, 'Teacher is required'),
   subject: z.string().trim().min(1, 'Subject is required').optional(),
-  meetLink: z.string().trim().url('Valid meeting link is required').optional(),
+  meetLink: safeMeetingLinkSchema.optional(),
 });
 
 export type AssignTeacherInput = z.infer<typeof assignTeacherSchema>;

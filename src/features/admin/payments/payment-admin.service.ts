@@ -382,17 +382,26 @@ export async function listPayoutSummaries(month = currentMonth()) {
     }),
   ]);
 
+  const sessionsByTeacher = new Map<string, (typeof sessions)[number][]>();
+  for (const session of sessions) {
+    const teacherSessions = sessionsByTeacher.get(session.teacherId) ?? [];
+    teacherSessions.push(session);
+    sessionsByTeacher.set(session.teacherId, teacherSessions);
+  }
+
+  const payoutsByTeacher = new Map(
+    payouts.map((item) => [item.teacherId, item] as const),
+  );
+
   return teachers.map((teacher) => {
-    const teacherSessions = sessions.filter(
-      (session) => session.teacherId === teacher.id,
-    );
+    const teacherSessions = sessionsByTeacher.get(teacher.id) ?? [];
     const verifiedMinutes = teacherSessions.reduce(
       (sum, session) => sum + session.durationMins,
       0,
     );
     const verifiedHours = verifiedMinutes / 60;
     const amount = verifiedHours * asNumber(teacher.hourlyRate);
-    const payout = payouts.find((item) => item.teacherId === teacher.id);
+    const payout = payoutsByTeacher.get(teacher.id);
 
     return {
       teacherId: teacher.id,

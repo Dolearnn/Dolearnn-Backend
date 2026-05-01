@@ -29,7 +29,7 @@ function jwtSecret() {
   return env.JWT_SECRET;
 }
 
-function signToken(user: Pick<User, 'id' | 'email' | 'role'>) {
+function signToken(user: Pick<User, 'id' | 'email' | 'role' | 'tokenVersion'>) {
   const options: SignOptions = {
     expiresIn: env.JWT_EXPIRES_IN as SignOptions['expiresIn'],
   };
@@ -37,6 +37,7 @@ function signToken(user: Pick<User, 'id' | 'email' | 'role'>) {
     {
       email: user.email,
       role: user.role,
+      tokenVersion: user.tokenVersion,
     },
     jwtSecret(),
     {
@@ -49,17 +50,19 @@ function signToken(user: Pick<User, 'id' | 'email' | 'role'>) {
 type ResetPasswordPayload = {
   purpose: 'reset-password';
   email: string;
+  state: string;
 };
 
 function resetPasswordLink(token: string) {
   return `${env.FRONTEND_URL.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(token)}`;
 }
 
-function signResetPasswordToken(user: Pick<User, 'id' | 'email'>) {
+function signResetPasswordToken(user: Pick<User, 'id' | 'email' | 'updatedAt'>) {
   return jwt.sign(
     {
       purpose: 'reset-password',
       email: user.email,
+      state: user.updatedAt.toISOString(),
     } satisfies ResetPasswordPayload,
     jwtSecret(),
     {
@@ -90,6 +93,7 @@ function verifyResetPasswordToken(token: string) {
   return {
     userId: decoded.sub,
     email: decoded.email,
+    state: String(decoded.state ?? ''),
   };
 }
 
@@ -280,6 +284,18 @@ export async function currentUser(userId: string) {
   return publicUser(user);
 }
 
+export async function logoutUser(userId: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return;
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      tokenVersion: { increment: 1 },
+    },
+  });
+}
+
 export async function changePassword(userId: string, input: ChangePasswordInput) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user || !user.passwordHash) {
@@ -301,6 +317,7 @@ export async function changePassword(userId: string, input: ChangePasswordInput)
     where: { id: user.id },
     data: {
       passwordHash,
+      tokenVersion: { increment: 1 },
       mustChangePassword: false,
     },
   });
@@ -335,6 +352,10 @@ export async function resetPassword(input: ResetPasswordInput) {
     throw new AppError(401, 'This reset link is invalid or has expired');
   }
 
+  if (user.updatedAt.toISOString() !== payload.state) {
+    throw new AppError(401, 'This reset link is invalid or has expired');
+  }
+
   assertActive(user);
 
   const passwordHash = await bcrypt.hash(input.newPassword, 12);
@@ -342,6 +363,7 @@ export async function resetPassword(input: ResetPasswordInput) {
     where: { id: user.id },
     data: {
       passwordHash,
+      tokenVersion: { increment: 1 },
       mustChangePassword: false,
       authProvider:
         user.authProvider === AuthProvider.GOOGLE ? AuthProvider.BOTH : user.authProvider,

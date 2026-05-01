@@ -122,35 +122,37 @@ async function main() {
     label: 'family register',
   });
 
-  const student = await request('/family/students', {
+  const parent = await prisma.parentProfile.findUnique({
+    where: { userId: family.user.id },
+  });
+  if (!parent) {
+    throw new Error('Expected registered family to have a parent profile.');
+  }
+
+  const student = await request('/admin/students', {
     method: 'POST',
-    token: family.token,
+    token: admin.token,
     body: JSON.stringify({
+      parentId: parent.id,
       fullName: 'Smoke Student',
       age: 12,
       grade: 'JSS',
       school: 'Smoke School',
+      intake: {
+        subject: 'Maths',
+        subjects: ['Maths'],
+        learningGoal: 'GENERAL_IMPROVEMENT',
+        currentLevel: 'AVERAGE',
+        teacherGenderPref: 'NO_PREFERENCE',
+        timezone: 'Africa/Lagos',
+        sessionsPerWeek: '1',
+        budget: 'Under $20',
+        schedule: [{ day: 'MON', time: 'EVENING' }],
+      },
     }),
-    label: 'family create student',
+    label: 'admin create student',
   });
-
-  await request(`/family/students/${student.student.id}/intake`, {
-    method: 'PUT',
-    token: family.token,
-    body: JSON.stringify({
-      subject: 'Maths',
-      subjects: ['Maths'],
-      learningGoal: 'GENERAL_IMPROVEMENT',
-      currentLevel: 'AVERAGE',
-      teacherGenderPref: 'NO_PREFERENCE',
-      timezone: 'Africa/Lagos',
-      sessionsPerWeek: '1',
-      budget: 'Under $20',
-      schedule: [{ day: 'MON', time: 'EVENING' }],
-    }),
-    label: 'family save intake',
-  });
-  console.log('OK family creates student and intake');
+  console.log('OK admin creates student and intake');
 
   await request(`/admin/students/${student.student.id}/assign-teacher`, {
     method: 'POST',

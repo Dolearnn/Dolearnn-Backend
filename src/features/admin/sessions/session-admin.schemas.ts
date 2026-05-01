@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { SessionStatus } from '@prisma/client';
+import { safeMeetingLinkSchema } from '../../../lib/urls';
 
 export const listAdminSessionsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -9,7 +10,7 @@ export const listAdminSessionsQuerySchema = z.object({
 });
 
 export const updateMeetingLinkSchema = z.object({
-  meetLink: z.string().trim().url('Valid meeting link is required'),
+  meetLink: safeMeetingLinkSchema,
 });
 
 export type UpdateMeetingLinkInput = z.infer<typeof updateMeetingLinkSchema>;
@@ -26,12 +27,19 @@ export const createAdminSessionSchema = z.object({
   durationMins: z.coerce.number().int().default(60).refine((value) => value === 60, {
     message: 'Sessions are 60 minutes',
   }),
-  meetLink: z
-    .string()
-    .trim()
-    .url('Valid meeting link is required')
-    .optional()
-    .or(z.literal('').transform(() => undefined)),
+  meetLink: safeMeetingLinkSchema.optional().or(
+    z.literal('').transform(() => undefined),
+  ),
 });
 
 export type CreateAdminSessionInput = z.infer<typeof createAdminSessionSchema>;
+
+export const scheduleBookingRequestSchema = z.object({
+  meetLink: safeMeetingLinkSchema.optional().or(
+    z.literal('').transform(() => undefined),
+  ),
+});
+
+export type ScheduleBookingRequestInput = z.infer<
+  typeof scheduleBookingRequestSchema
+>;
