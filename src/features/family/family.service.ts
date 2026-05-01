@@ -7,6 +7,7 @@ import {
   CancellationStatus,
   LessonPackageStatus,
   DayOfWeek,
+  Prisma,
   ProposalStatus,
   Role,
   SessionStatus,
@@ -14,6 +15,10 @@ import {
 } from '@prisma/client';
 import { AppError } from '../../lib/http';
 import { prisma } from '../../lib/prisma';
+import {
+  assertStudentHasNoSchedulingConflict,
+  assertTeacherHasNoSchedulingConflict,
+} from '../../lib/session-conflicts';
 import { createAuditLog, type AuditActor } from '../audit/audit.service';
 import {
   createAdminNotifications,
@@ -526,42 +531,6 @@ export async function createBookingRequest(
   const student = await getOwnedStudent(userId, input.studentId);
   const parent = await getParentProfile(userId);
   const subject = input.subject.trim();
-  const [packages, pendingRequests] = await Promise.all([
-    prisma.studentLessonPackage.findMany({
-      where: {
-        parentId: parent.id,
-        studentId: student.id,
-        subject,
-        status: LessonPackageStatus.ACTIVE,
-      },
-      orderBy: { createdAt: 'asc' },
-    }),
-    prisma.sessionBookingRequest.findMany({
-      where: {
-        parentId: parent.id,
-        studentId: student.id,
-        subject,
-        status: BookingRequestStatus.PENDING,
-      },
-    }),
-  ]);
-  const availableSessions =
-    packages.reduce(
-      (sum, lessonPackage) =>
-        sum + (lessonPackage.hoursPurchased - lessonPackage.hoursScheduled),
-      0,
-    ) -
-    pendingRequests.reduce(
-      (sum, request) => sum + request.sessionsRequested,
-      0,
-    );
-
-  if (input.sessionsRequested > availableSessions) {
-    throw new AppError(
-      400,
-      'Requested sessions exceed available paid hours for this student and subject',
-    );
-  }
 
   const subjectAssigned = student.subjectAssignments.some(
     (assignment) =>
@@ -590,6 +559,44 @@ export async function createBookingRequest(
   }
 
   return prisma.$transaction(async (tx) => {
+    const [packages, pendingRequests] = await Promise.all([
+      tx.studentLessonPackage.findMany({
+        where: {
+          parentId: parent.id,
+          studentId: student.id,
+          subject,
+          status: LessonPackageStatus.ACTIVE,
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+      tx.sessionBookingRequest.findMany({
+        where: {
+          parentId: parent.id,
+          studentId: student.id,
+          subject,
+          status: BookingRequestStatus.PENDING,
+        },
+      }),
+    ]);
+
+    const availableSessions =
+      packages.reduce(
+        (sum, lessonPackage) =>
+          sum + (lessonPackage.hoursPurchased - lessonPackage.hoursScheduled),
+        0,
+      ) -
+      pendingRequests.reduce(
+        (sum, request) => sum + request.sessionsRequested,
+        0,
+      );
+
+    if (input.sessionsRequested > availableSessions) {
+      throw new AppError(
+        400,
+        'Requested sessions exceed available paid hours for this student and subject',
+      );
+    }
+
     const request = await tx.sessionBookingRequest.create({
       data: {
         parentId: student.parentId,
@@ -617,6 +624,8 @@ export async function createBookingRequest(
     );
 
     return request;
+  }, {
+    isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
   });
 }
 
@@ -830,6 +839,19 @@ export async function acceptSessionProposal(
   }
 
   return prisma.$transaction(async (tx) => {
+    await assertTeacherHasNoSchedulingConflict(
+      tx,
+      proposal.teacherId,
+      proposal.startsAt,
+      proposal.durationMins,
+    );
+    await assertStudentHasNoSchedulingConflict(
+      tx,
+      proposal.studentId,
+      proposal.startsAt,
+      proposal.durationMins,
+    );
+
     const updatedProposal = await tx.sessionProposal.update({
       where: { id: proposal.id },
       data: {

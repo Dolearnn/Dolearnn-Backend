@@ -11,6 +11,10 @@ import {
 } from '@prisma/client';
 import { AppError } from '../../../lib/http';
 import { prisma } from '../../../lib/prisma';
+import {
+  assertStudentHasNoSchedulingConflict,
+  assertTeacherHasNoSchedulingConflict,
+} from '../../../lib/session-conflicts';
 import { zonedLocalDateTimeToUtc } from '../../../lib/timezones';
 import { createAuditLog, type AuditActor } from '../../audit/audit.service';
 import {
@@ -20,6 +24,7 @@ import {
 import type {
   CreateAdminSessionInput,
   ListAdminSessionsQueryInput,
+  ScheduleBookingRequestInput,
   UpdateMeetingLinkInput,
 } from './session-admin.schemas';
 
@@ -198,46 +203,62 @@ async function consumePaidSessions(
   return consumed;
 }
 
-export async function scheduleBookingRequest(requestId: string) {
-  const request = await prisma.sessionBookingRequest.findUnique({
-    where: { id: requestId },
-    include: {
-      parent: { include: { user: true } },
-      student: {
-        include: {
-          intake: true,
+export async function scheduleBookingRequest(
+  requestId: string,
+  input?: ScheduleBookingRequestInput,
+) {
+  return prisma.$transaction(async (tx) => {
+    const request = await tx.sessionBookingRequest.findUnique({
+      where: { id: requestId },
+      include: {
+        parent: { include: { user: true } },
+        student: {
+          include: {
+            intake: true,
+          },
         },
       },
-    },
-  });
+    });
 
-  if (!request) {
-    throw new AppError(404, 'Booking request not found');
-  }
+    if (!request) {
+      throw new AppError(404, 'Booking request not found');
+    }
 
-  if (request.status !== BookingRequestStatus.PENDING) {
-    throw new AppError(400, 'This booking request has already been resolved');
-  }
+    if (request.status !== BookingRequestStatus.PENDING) {
+      throw new AppError(400, 'This booking request has already been resolved');
+    }
 
-  const assignment = await prisma.studentSubjectAssignment.findUnique({
-    where: {
-      studentId_subject: {
-        studentId: request.studentId,
-        subject: request.subject,
+    const assignment = await tx.studentSubjectAssignment.findUnique({
+      where: {
+        studentId_subject: {
+          studentId: request.studentId,
+          subject: request.subject,
+        },
       },
-    },
-    include: {
-      teacher: {
-        include: { user: true },
+      include: {
+        teacher: {
+          include: { user: true },
+        },
       },
-    },
-  });
+    });
 
-  if (!assignment) {
-    throw new AppError(400, 'This subject has no assigned teacher yet');
-  }
+    if (!assignment) {
+      throw new AppError(400, 'This subject has no assigned teacher yet');
+    }
 
-  return prisma.$transaction(async (tx) => {
+    const meetLink = input?.meetLink?.trim() || assignment.meetLink;
+    if (input?.meetLink?.trim()) {
+      await tx.studentSubjectAssignment.update({
+        where: {
+          studentId_subject: {
+            studentId: assignment.studentId,
+            subject: request.subject,
+          },
+        },
+        data: { meetLink },
+      });
+    }
+
     const packageIds = await consumePaidSessions(
       request.parentId,
       request.studentId,
@@ -250,6 +271,21 @@ export async function scheduleBookingRequest(requestId: string) {
     for (let index = 0; index < request.sessionsRequested; index += 1) {
       const date = new Date(request.startDate);
       date.setUTCDate(date.getUTCDate() + index * 7);
+      const startsAt = dateWithTime(date, request.startTime, request.timezone);
+
+      await assertTeacherHasNoSchedulingConflict(
+        tx,
+        assignment.teacherId,
+        startsAt,
+        60,
+      );
+      await assertStudentHasNoSchedulingConflict(
+        tx,
+        request.studentId,
+        startsAt,
+        60,
+      );
+
       sessions.push(
         await tx.session.create({
           data: {
@@ -257,9 +293,9 @@ export async function scheduleBookingRequest(requestId: string) {
             teacherId: assignment.teacherId,
             lessonPackageId: packageIds[index],
             subject: request.subject,
-            startsAt: dateWithTime(date, request.startTime, request.timezone),
+            startsAt,
             durationMins: 60,
-            meetLink: assignment.meetLink,
+            meetLink,
             amount: assignment.teacher.hourlyRate,
           },
           include: sessionInclude,
@@ -297,7 +333,7 @@ export async function scheduleBookingRequest(requestId: string) {
       tx,
     );
 
-    if (!assignment.meetLink) {
+    if (!meetLink) {
       await createAdminNotifications(
         {
           title: 'Meeting link needed',
@@ -310,6 +346,8 @@ export async function scheduleBookingRequest(requestId: string) {
     }
 
     return { request: updatedRequest, sessions };
+  }, {
+    isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
   });
 }
 
@@ -337,6 +375,8 @@ export async function createAdminSession(input: CreateAdminSessionInput) {
 
   return prisma.$transaction(async (tx) => {
     const meetLink = input.meetLink?.trim() || assignment.meetLink;
+    const startsAt = new Date(input.startsAt);
+
     if (input.meetLink?.trim()) {
       await tx.studentSubjectAssignment.update({
         where: {
@@ -348,6 +388,19 @@ export async function createAdminSession(input: CreateAdminSessionInput) {
         data: { meetLink },
       });
     }
+
+    await assertTeacherHasNoSchedulingConflict(
+      tx,
+      assignment.teacherId,
+      startsAt,
+      input.durationMins,
+    );
+    await assertStudentHasNoSchedulingConflict(
+      tx,
+      assignment.studentId,
+      startsAt,
+      input.durationMins,
+    );
 
     const packageIds = await consumePaidSessions(
       assignment.student.parentId,
@@ -363,7 +416,7 @@ export async function createAdminSession(input: CreateAdminSessionInput) {
         teacherId: assignment.teacherId,
         lessonPackageId: packageIds[0],
         subject,
-        startsAt: new Date(input.startsAt),
+        startsAt,
         durationMins: input.durationMins,
         meetLink,
         amount: assignment.teacher.hourlyRate,
@@ -406,6 +459,8 @@ export async function createAdminSession(input: CreateAdminSessionInput) {
     }
 
     return { session };
+  }, {
+    isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
   });
 }
 

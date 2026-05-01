@@ -3,6 +3,7 @@ import { AppError, asyncHandler } from '../../../lib/http';
 import {
   createAdminSessionSchema,
   listAdminSessionsQuerySchema,
+  scheduleBookingRequestSchema,
   updateMeetingLinkSchema,
 } from './session-admin.schemas';
 import {
@@ -71,7 +72,8 @@ sessionAdminRoutes.post(
   '/booking-requests/:requestId/schedule',
   asyncHandler(async (req, res) => {
     const requestId = getRouteParam(req.params.requestId, 'request id');
-    const result = await scheduleBookingRequest(requestId);
+    const input = scheduleBookingRequestSchema.parse(req.body ?? {});
+    const result = await scheduleBookingRequest(requestId, input);
     res.json(result);
   }),
 );

@@ -1,13 +1,15 @@
 import jwt from 'jsonwebtoken';
 import type { NextFunction, Request, Response } from 'express';
-import type { Role } from '@prisma/client';
+import { AccountStatus, type Role } from '@prisma/client';
 import { env } from '../config/env';
 import { AppError } from '../lib/http';
+import { prisma } from '../lib/prisma';
 
 interface AuthTokenPayload {
   sub: string;
   email: string;
   role: string;
+  tokenVersion: number;
 }
 
 function jwtSecret() {
@@ -17,7 +19,11 @@ function jwtSecret() {
   return env.JWT_SECRET;
 }
 
-export function requireAuth(req: Request, _res: Response, next: NextFunction) {
+export async function requireAuth(
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+) {
   const header = req.header('authorization');
   const token = header?.startsWith('Bearer ') ? header.slice(7) : null;
 
@@ -27,10 +33,29 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
 
   try {
     const payload = jwt.verify(token, jwtSecret()) as AuthTokenPayload;
+    const user = await prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        status: true,
+        tokenVersion: true,
+      },
+    });
+
+    if (!user || user.status !== AccountStatus.ACTIVE) {
+      return next(new AppError(401, 'Invalid or expired token'));
+    }
+
+    if (user.tokenVersion !== payload.tokenVersion || user.role !== payload.role) {
+      return next(new AppError(401, 'Invalid or expired token'));
+    }
+
     req.user = {
-      id: payload.sub,
-      email: payload.email,
-      role: payload.role as never,
+      id: user.id,
+      email: user.email,
+      role: user.role as never,
     };
     return next();
   } catch {

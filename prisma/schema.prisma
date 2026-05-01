@@ -112,6 +112,7 @@ enum PaymentPlan {
 }
 
 enum PaymentGateway {
+  OFFLINE
   STRIPE
   FLUTTERWAVE
 }
@@ -177,6 +178,7 @@ model User {
   name         String
   role         Role
   status       AccountStatus @default(ACTIVE)
+  tokenVersion Int           @default(0)
   mustChangePassword Boolean @default(false)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
