@@ -11,10 +11,12 @@ async function upsertLead(params: {
   email: string;
   fullName?: string;
   phone?: string;
+  userType?: string;
 }) {
   const email = params.email.trim().toLowerCase();
   const fullName = params.fullName?.trim() || undefined;
   const phone = params.phone?.trim() || undefined;
+  const userType = params.userType?.trim() || undefined;
   const existing = await prisma.lead.findUnique({
     where: {
       source_email: {
@@ -30,6 +32,7 @@ async function upsertLead(params: {
         data: {
           fullName: fullName ?? existing.fullName,
           phone: phone ?? existing.phone,
+          userType: userType ?? existing.userType,
           submissionCount: { increment: 1 },
           lastSubmittedAt: new Date(),
         },
@@ -40,6 +43,7 @@ async function upsertLead(params: {
           fullName,
           email,
           phone,
+          userType,
         },
       });
 
@@ -52,11 +56,12 @@ export async function createWaitlistEntry(input: CreateWaitlistEntryInput) {
     fullName: input.fullName,
     email: input.email,
     phone: input.phone,
+    userType: input.userType,
   });
 
   await createAdminNotifications({
     title: isRepeat ? 'Waitlist entry updated' : 'New waitlist entry',
-    body: `${lead.fullName?.trim() || 'A lead'} ${isRepeat ? 'updated their waitlist details' : 'joined the waitlist'}. Email: ${lead.email}. WhatsApp: ${lead.phone || 'not provided'}. Total submissions: ${lead.submissionCount}.`,
+    body: `${lead.fullName?.trim() || 'A lead'} ${isRepeat ? 'updated their waitlist details' : 'joined the waitlist'}. User type: ${lead.userType || 'not provided'}. Email: ${lead.email}. WhatsApp: ${lead.phone || 'not provided'}. Total submissions: ${lead.submissionCount}.`,
   });
 
   return { ok: true, leadId: lead.id };

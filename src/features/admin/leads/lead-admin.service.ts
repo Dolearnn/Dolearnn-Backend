@@ -18,6 +18,7 @@ function buildLeadWhere(input: ListLeadsQueryInput) {
             { fullName: { contains: search, mode: 'insensitive' as const } },
             { email: { contains: search, mode: 'insensitive' as const } },
             { phone: { contains: search, mode: 'insensitive' as const } },
+            { userType: { contains: search, mode: 'insensitive' as const } },
           ],
         }
       : {}),

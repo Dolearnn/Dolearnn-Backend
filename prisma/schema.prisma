@@ -504,6 +504,7 @@ model Lead {
   fullName  String?
   email     String
   phone     String?
+  userType  String?
   submissionCount Int  @default(1)
   lastSubmittedAt DateTime @default(now())
   createdAt DateTime   @default(now())

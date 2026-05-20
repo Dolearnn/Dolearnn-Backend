@@ -373,6 +373,7 @@ CREATE TABLE "Lead" (
     "fullName" TEXT,
     "email" TEXT NOT NULL,
     "phone" TEXT,
+    "userType" TEXT,
     "submissionCount" INTEGER NOT NULL DEFAULT 1,
     "lastSubmittedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
