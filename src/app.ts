@@ -1,3 +1,4 @@
+import compression from 'compression';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
@@ -39,7 +40,8 @@ export function createApp() {
   const origins = allowedOrigins();
 
   app.use(helmet());
-  
+  app.use(compression());
+
   app.use(
     cors({
       origin(origin, callback) {
@@ -55,6 +57,11 @@ export function createApp() {
   );
   app.use(express.json());
 
+  app.get("/", (req,res)=>{
+    res.json({
+      msg: "sucess"
+    })
+  })
   setupSwagger(app);
   app.use('/api', routes);
   app.use(notFoundHandler);

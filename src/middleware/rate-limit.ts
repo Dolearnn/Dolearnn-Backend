@@ -15,6 +15,15 @@ type Bucket = {
 
 const buckets = new Map<string, Bucket>();
 
+// Evict expired buckets so the map doesn't grow unbounded under sustained traffic.
+const SWEEP_INTERVAL_MS = 60_000;
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, bucket] of buckets) {
+    if (bucket.resetAt <= now) buckets.delete(key);
+  }
+}, SWEEP_INTERVAL_MS).unref();
+
 function clientKey(req: Request) {
   const forwarded = req.header('x-forwarded-for')?.split(',')[0]?.trim();
   return forwarded || req.ip || 'unknown';

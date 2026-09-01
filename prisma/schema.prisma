@@ -265,6 +265,9 @@ model Student {
   notifications   Notification[]
   auditLogs       AuditLog[]
   bookingRequests SessionBookingRequest[]
+
+  @@index([parentId])
+  @@index([assignedTeacherId])
 }
 
 model StudentSubjectAssignment {
@@ -300,6 +303,10 @@ model SessionBookingRequest {
 
   parent  ParentProfile @relation(fields: [parentId], references: [id], onDelete: Cascade)
   student Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([parentId])
+  @@index([studentId])
+  @@index([status])
 }
 
 model StudentLessonPackage {
@@ -319,6 +326,9 @@ model StudentLessonPackage {
   parent   ParentProfile @relation(fields: [parentId], references: [id], onDelete: Cascade)
   student  Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
   sessions Session[]
+
+  @@index([parentId])
+  @@index([studentId])
 }
 
 model Intake {
@@ -363,6 +373,8 @@ model Goal {
   updatedAt  DateTime  @updatedAt
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
 }
 
 model SessionProposal {
@@ -385,6 +397,10 @@ model SessionProposal {
   student Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
   teacher TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   session Session?
+
+  @@index([studentId])
+  @@index([teacherId])
+  @@index([status])
 }
 
 model Session {
@@ -409,6 +425,11 @@ model Session {
   attendance   Attendance?
   note         SessionNote?
   cancellations CancellationRequest[]
+
+  @@index([studentId, startsAt])
+  @@index([teacherId, startsAt])
+  @@index([lessonPackageId])
+  @@index([status, startsAt])
 }
 
 model Attendance {
@@ -432,6 +453,9 @@ model CancellationRequest {
   resolvedAt  DateTime?
 
   session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([status])
 }
 
 model SessionNote {
@@ -448,6 +472,8 @@ model SessionNote {
 
   session Session        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   teacher TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@index([teacherId])
 }
 
 model Payment {
@@ -462,6 +488,8 @@ model Payment {
   updatedAt        DateTime       @updatedAt
 
   parent ParentProfile @relation(fields: [parentId], references: [id], onDelete: Cascade)
+
+  @@index([parentId, createdAt])
 }
 
 model TeacherPayout {

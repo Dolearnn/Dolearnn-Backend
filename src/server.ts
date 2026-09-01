@@ -1,7 +1,16 @@
 import { createApp } from './app';
 import { env } from './config/env';
+import { prisma } from './lib/prisma';
 
 const app = createApp();
+
+// Open the database connection (and spin up the Prisma query engine) at boot so
+// the first real request doesn't pay that cost. Also nudges a suspended
+// serverless database awake while the HTTP server is still starting.
+void prisma
+  .$connect()
+  .then(() => console.log('Database connection established'))
+  .catch((error) => console.error('Initial database connection failed', error));
 
 const server = app.listen(env.PORT, () => {
   console.log(`DoLearn API listening on http://localhost:${env.PORT}`);
@@ -20,7 +29,9 @@ server.on('error', (error: NodeJS.ErrnoException) => {
 
 function shutdown(signal: string) {
   console.log(`${signal} received. Shutting down DoLearn API...`);
-  server.close(() => process.exit(0));
+  server.close(() => {
+    void prisma.$disconnect().finally(() => process.exit(0));
+  });
 }
 
 process.on('SIGINT', () => shutdown('SIGINT'));

@@ -18,6 +18,10 @@ import type {
 
 const googleClient = new OAuth2Client();
 
+// bcrypt work factor. 10 (~60-100ms) is the accepted baseline and keeps login /
+// registration snappy on shared-CPU hosting; 12 was ~4x slower per hash.
+const BCRYPT_ROUNDS = 10;
+
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
@@ -129,7 +133,7 @@ export async function registerParent(input: RegisterInput) {
     throw new AppError(409, 'An account already exists for this email');
   }
 
-  const passwordHash = await bcrypt.hash(input.password, 12);
+  const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
   const name = input.name.trim();
   const whatsapp = input.whatsapp?.trim() || null;
 
@@ -312,7 +316,7 @@ export async function changePassword(userId: string, input: ChangePasswordInput)
     throw new AppError(401, 'Current password is incorrect');
   }
 
-  const passwordHash = await bcrypt.hash(input.newPassword, 12);
+  const passwordHash = await bcrypt.hash(input.newPassword, BCRYPT_ROUNDS);
   const updated = await prisma.user.update({
     where: { id: user.id },
     data: {
@@ -358,7 +362,7 @@ export async function resetPassword(input: ResetPasswordInput) {
 
   assertActive(user);
 
-  const passwordHash = await bcrypt.hash(input.newPassword, 12);
+  const passwordHash = await bcrypt.hash(input.newPassword, BCRYPT_ROUNDS);
   const updated = await prisma.user.update({
     where: { id: user.id },
     data: {

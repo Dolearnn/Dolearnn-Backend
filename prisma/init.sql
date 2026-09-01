@@ -557,3 +557,29 @@ ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_studentId_fkey" FOREIGN KEY ("st
 
 -- AddForeignKey
 ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_teacherId_fkey" FOREIGN KEY ("teacherId") REFERENCES "TeacherProfile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- ---------------------------------------------------------------------------
+-- Performance indexes on foreign keys / common filter columns.
+-- Kept in sync with @@index() blocks in schema.prisma.
+-- ---------------------------------------------------------------------------
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "Student_parentId_idx" ON "Student"("parentId");
+CREATE INDEX IF NOT EXISTS "Student_assignedTeacherId_idx" ON "Student"("assignedTeacherId");
+CREATE INDEX IF NOT EXISTS "SessionBookingRequest_parentId_idx" ON "SessionBookingRequest"("parentId");
+CREATE INDEX IF NOT EXISTS "SessionBookingRequest_studentId_idx" ON "SessionBookingRequest"("studentId");
+CREATE INDEX IF NOT EXISTS "SessionBookingRequest_status_idx" ON "SessionBookingRequest"("status");
+CREATE INDEX IF NOT EXISTS "StudentLessonPackage_parentId_idx" ON "StudentLessonPackage"("parentId");
+CREATE INDEX IF NOT EXISTS "StudentLessonPackage_studentId_idx" ON "StudentLessonPackage"("studentId");
+CREATE INDEX IF NOT EXISTS "Goal_studentId_idx" ON "Goal"("studentId");
+CREATE INDEX IF NOT EXISTS "SessionProposal_studentId_idx" ON "SessionProposal"("studentId");
+CREATE INDEX IF NOT EXISTS "SessionProposal_teacherId_idx" ON "SessionProposal"("teacherId");
+CREATE INDEX IF NOT EXISTS "SessionProposal_status_idx" ON "SessionProposal"("status");
+CREATE INDEX IF NOT EXISTS "Session_studentId_startsAt_idx" ON "Session"("studentId", "startsAt");
+CREATE INDEX IF NOT EXISTS "Session_teacherId_startsAt_idx" ON "Session"("teacherId", "startsAt");
+CREATE INDEX IF NOT EXISTS "Session_lessonPackageId_idx" ON "Session"("lessonPackageId");
+CREATE INDEX IF NOT EXISTS "Session_status_startsAt_idx" ON "Session"("status", "startsAt");
+CREATE INDEX IF NOT EXISTS "CancellationRequest_sessionId_idx" ON "CancellationRequest"("sessionId");
+CREATE INDEX IF NOT EXISTS "CancellationRequest_status_idx" ON "CancellationRequest"("status");
+CREATE INDEX IF NOT EXISTS "SessionNote_teacherId_idx" ON "SessionNote"("teacherId");
+CREATE INDEX IF NOT EXISTS "Payment_parentId_createdAt_idx" ON "Payment"("parentId", "createdAt");
