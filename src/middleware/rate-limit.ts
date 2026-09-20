@@ -6,6 +6,9 @@ type RateLimitOptions = {
   windowMs: number;
   max: number;
   message: string;
+  // Defaults to the client IP. Pass the user id for authenticated routes so
+  // students sharing campus or school Wi-Fi don't rate-limit each other.
+  keyGenerator?: (req: Request) => string;
 };
 
 type Bucket = {
@@ -31,7 +34,9 @@ function clientKey(req: Request) {
 
 export function rateLimit(options: RateLimitOptions) {
   return (req: Request, _res: Response, next: NextFunction) => {
-    const key = `${options.keyPrefix}:${clientKey(req)}`;
+    const key = `${options.keyPrefix}:${
+      options.keyGenerator ? options.keyGenerator(req) : clientKey(req)
+    }`;
     const now = Date.now();
     const current = buckets.get(key);
 

@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "build": "prisma generate && tsc",
-    "start": "node dist/server.js",
+    "dev": "node api.js && tsx watch src/server.ts",
+    "build": "node api.js && prisma generate && tsc",
+    "start": "node api.js && node dist/server.js",
     "postinstall": "prisma generate",
     "typecheck": "tsc --noEmit",
     "check-db": "node scripts/check-db.js",
@@ -17,6 +17,7 @@
     "prisma:migrate": "prisma migrate dev"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.127.0",
     "@prisma/client": "^5.22.0",
     "@sendgrid/mail": "^8.1.6",
     "bcryptjs": "^2.4.3",
