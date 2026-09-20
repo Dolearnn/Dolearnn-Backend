@@ -22,6 +22,12 @@ const envSchema = z.object({
   EMAIL_FROM_NAME: z.string().min(1).optional(),
   RESEND_API_KEY: z.string().min(1).optional(),
   SENDGRID_API_KEY: z.string().min(1).optional(),
+  // AI features stay switched off until a key is set.
+  ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  // Which Claude model writes explanations. Explanations are generated once per
+  // question and reused, so the strongest model stays cheap; pick a smaller one
+  // (for example claude-sonnet-5) here if that ever changes.
+  AI_MODEL: z.string().min(1).default('claude-opus-5'),
 });
 
 export const env = envSchema.parse(process.env);
