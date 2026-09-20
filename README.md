@@ -197,6 +197,61 @@ POST /api/teacher/session-proposals
 - The proposed date matches one of the student's available days.
 - The proposed time is inside the selected Morning, Afternoon, or Evening block.
 
+## Quizzes
+
+The quiz section lets anyone practise exam questions (JAMB, WAEC, NECO, ...) and turns weak results into a tutoring suggestion.
+
+Setup (one time, additive - touches no existing table):
+
+```bash
+psql "$DATABASE_URL" -f prisma/quiz-tables.sql
+npm run prisma:generate
+```
+
+Player endpoints (`/api/quiz`):
+
+```txt
+GET  /api/quiz/catalog                       public, cached: exams, subjects, topics, question counts
+POST /api/quiz/attempts                      start a quiz (subjectId, examId?, topicIds?, count, mode, studentId?)
+GET  /api/quiz/attempts                      history, cursor-paginated
+GET  /api/quiz/attempts/:id                  resume an in-progress attempt, or review a finished one
+POST /api/quiz/attempts/:id/submit           grade it (safe to retry)
+GET  /api/quiz/weak-topics?studentId=        running per-topic accuracy + tutoring prefill
+```
+
+Admin endpoints (`/api/admin/quiz`): `GET /overview`, `POST /exams`, `PATCH /exams/:id`, `POST /subjects`, `PATCH /subjects/:id`, `POST /topics`, `GET /questions`, `POST /questions/import`, `POST /questions/status`, `PATCH /questions/:id`.
+
+Notes:
+
+- Questions are only published to players when their status is `PUBLISHED`. Import creates `DRAFT` unless a row says otherwise.
+- `POST /questions/import` takes up to 100 rows per request and reports per-row errors. Rows with a `sourceKey` are skipped on re-import, so a file can be re-run safely.
+- Grading happens on the server. Correct answers and explanations are only sent after an attempt is submitted.
+- A quiz costs two database writes (start, submit) however many questions it has. Answers and the topic breakdown are stored as JSON on the attempt.
+- The catalog and the question-id pools are cached in memory for 5 minutes and cleared on any admin change. With several server instances, a change reaches the other instances within 5 minutes.
+- Quiz rate limits are per user and kept in memory per instance, like the other limiters.
+- Passing `studentId` (a family's own child) keeps that child's stats separate and lets the result pre-fill that child's tutoring intake.
+
+### AI explanations
+
+"Explain with AI" on the quiz review writes a short worked explanation for a question, grounded on the stored answer key.
+
+Setup (one time):
+
+```bash
+npx prisma db execute --file prisma/ai-explanations.sql --schema prisma/schema.prisma
+# then set ANTHROPIC_API_KEY in .env (and optionally AI_MODEL)
+```
+
+```txt
+POST /api/quiz/attempts/:attemptId/questions/:questionId/explain
+```
+
+- Off until `ANTHROPIC_API_KEY` is set. `GET /api/quiz/catalog` reports `ai.explanations` so the UI only shows the button when it works.
+- Only available after the quiz is submitted (it reveals the answer), and only for questions in the caller's own attempt.
+- Each explanation is generated once, stored in `QuestionExplanation`, and reused for every learner, so AI cost grows with the size of the question bank, not with the number of users. Simultaneous requests for a new question share one model call.
+- Failed generations are never stored, and stored explanations keep working if the key is removed.
+- If the model thinks an answer key is wrong it adds a "Note:" line and the server logs a warning: check those questions.
+
 ## Current Status
 
 This backend now powers the main frontend flows: auth, role-based access, family students and intakes, admin teacher matching, session proposals, attendance, cancellations, notes, notifications, payments, payouts, and reports.

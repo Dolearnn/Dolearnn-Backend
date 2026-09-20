@@ -146,6 +146,29 @@ enum LeadStatus {
   ARCHIVED
 }
 
+enum QuestionStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum QuestionDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum QuizMode {
+  PRACTICE
+  MOCK
+}
+
+enum QuizAttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  EXPIRED
+}
+
 enum AuditAction {
   STUDENT_CREATED
   PAYMENT_RECORDED
@@ -187,6 +210,10 @@ model User {
   teacherProfile TeacherProfile?
   notifications  Notification[]
   auditLogs      AuditLog[]
+  quizAttempts   QuizAttempt[]
+  topicStats     UserTopicStat[]
+  arenaChallenges ArenaChallenge[]
+  arenaEntries    ArenaEntry[]
 }
 
 model ParentProfile {
@@ -265,6 +292,8 @@ model Student {
   notifications   Notification[]
   auditLogs       AuditLog[]
   bookingRequests SessionBookingRequest[]
+  quizAttempts    QuizAttempt[]
+  arenaEntries    ArenaEntry[]
 
   @@index([parentId])
   @@index([assignedTeacherId])
@@ -542,6 +571,225 @@ model Lead {
   @@index([source, status, createdAt])
   @@index([status, createdAt])
   @@index([email, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Quizzes
+//
+// Read-heavy question bank + write-light attempts: one insert when an attempt
+// starts and one update when it is submitted. Answers and the per-topic
+// breakdown live in JSON on the attempt row, so a quiz costs two writes no
+// matter how many questions it has.
+// ---------------------------------------------------------------------------
+
+model Exam {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  questions Question[]
+  attempts  QuizAttempt[]
+  arenaChallenges ArenaChallenge[]
+}
+
+model Subject {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  topics    Topic[]
+  questions Question[]
+  attempts  QuizAttempt[]
+  arenaChallenges ArenaChallenge[]
+}
+
+model Topic {
+  id        String   @id @default(cuid())
+  subjectId String
+  slug      String
+  name      String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  subject   Subject         @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  questions Question[]
+  stats     UserTopicStat[]
+
+  @@unique([subjectId, slug])
+  @@index([subjectId])
+}
+
+model Question {
+  id              String             @id @default(cuid())
+  // Lets an import be re-run without creating duplicates.
+  sourceKey       String?            @unique
+  examId          String?
+  subjectId       String
+  topicId         String
+  year            Int?
+  text            String
+  imageUrl        String?
+  // [{ "id": "A", "text": "..." }, ...]
+  options         Json
+  correctOptionId String
+  explanation     String?
+  difficulty      QuestionDifficulty @default(MEDIUM)
+  status          QuestionStatus     @default(DRAFT)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  exam    Exam?   @relation(fields: [examId], references: [id], onDelete: SetNull)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  topic   Topic   @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  aiExplanation QuestionExplanation?
+
+  @@index([subjectId, examId, status])
+  @@index([topicId])
+  @@index([status, createdAt])
+}
+
+// An AI-written summary of one submitted quiz (strengths, weak topics, next step),
+// generated at most once per attempt. Only AI text is stored; the rules-based
+// fallback is cheap to rebuild and is never saved.
+model AttemptDiagnosis {
+  attemptId String   @id
+  body      String
+  model     String
+  createdAt DateTime @default(now())
+
+  attempt QuizAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+}
+
+// An AI-written worked explanation, generated once per question and then shared
+// by every learner, so AI cost grows with the size of the question bank rather
+// than with the number of users.
+model QuestionExplanation {
+  questionId String   @id
+  body       String
+  model      String
+  createdAt  DateTime @default(now())
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+}
+
+model QuizAttempt {
+  id             String            @id @default(cuid())
+  userId         String
+  // Set when a parent takes the quiz on behalf of one of their children.
+  studentId      String?
+  examId         String?
+  subjectId      String
+  mode           QuizMode
+  status         QuizAttemptStatus @default(IN_PROGRESS)
+  // Ordered snapshot of the questions served, so grading never depends on the
+  // question bank staying the same.
+  questionIds    String[]
+  totalQuestions Int
+  timeLimitSecs  Int?
+  startedAt      DateTime          @default(now())
+  expiresAt      DateTime?
+  submittedAt    DateTime?
+  correctCount   Int?
+  scorePercent   Int?
+  timedOut       Boolean           @default(false)
+  // { "<questionId>": "<optionId>" }
+  answers        Json?
+  // [{ "topicId", "name", "attempted", "correct" }]
+  topicBreakdown Json?
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  student Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  exam    Exam?    @relation(fields: [examId], references: [id], onDelete: SetNull)
+  subject Subject  @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  arenaEntry ArenaEntry?
+  diagnosis  AttemptDiagnosis?
+
+  @@index([userId, startedAt])
+  @@index([userId, subjectId, startedAt])
+  @@index([userId, status])
+  @@index([studentId, startedAt])
+}
+
+// Running per-topic totals for a learner, updated once per submitted attempt.
+// `learnerId` is the Student id when a parent quizzes for a child, otherwise the
+// User id (both are cuids, so they cannot collide). `userId` is always the
+// account that owns the data, and cascades on account deletion.
+model UserTopicStat {
+  learnerId     String
+  topicId       String
+  userId        String
+  attempted     Int      @default(0)
+  correct       Int      @default(0)
+  lastAttemptAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic Topic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@id([learnerId, topicId])
+  @@index([userId])
+  @@index([topicId])
+}
+
+// ---------------------------------------------------------------------------
+// Arena (async 1v1 battles)
+//
+// A challenge fixes a set of questions and is shared by a short code. Each of the
+// two players plays it as an ordinary QuizAttempt, so grading, topic stats and
+// progress all work unchanged. A battle costs three writes to start, three more
+// when the second player joins, and nothing extra when each player submits.
+// ---------------------------------------------------------------------------
+
+model ArenaChallenge {
+  id              String   @id @default(cuid())
+  // Short, unambiguous code that players share to join.
+  code            String   @unique
+  createdByUserId String
+  subjectId       String
+  examId          String?
+  // Ordered snapshot of the questions, identical for both players.
+  questionIds     String[]
+  totalQuestions  Int
+  createdAt       DateTime @default(now())
+  expiresAt       DateTime
+
+  createdBy User         @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
+  subject   Subject      @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  exam      Exam?        @relation(fields: [examId], references: [id], onDelete: SetNull)
+  entries   ArenaEntry[]
+
+  @@index([createdByUserId, createdAt])
+}
+
+model ArenaEntry {
+  id          String   @id @default(cuid())
+  challengeId String
+  // 1 = the player who created the battle, 2 = the player who joined.
+  slot        Int
+  userId      String
+  // Set when a parent plays on behalf of one of their children.
+  studentId   String?
+  // First name only, so other players never see a child's full name.
+  playerName  String
+  attemptId   String   @unique
+  joinedAt    DateTime @default(now())
+
+  challenge ArenaChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  student   Student?       @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  attempt   QuizAttempt    @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  // Two slots per battle; also stops two people taking the second seat at once.
+  @@unique([challengeId, slot])
+  @@index([userId, joinedAt])
 }
 
 model AuditLog {
