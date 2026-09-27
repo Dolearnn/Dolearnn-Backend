@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, QuestionStatus } from '@prisma/client';
 import { AppError } from '../../../lib/http';
 import { prisma } from '../../../lib/prisma';
 import { invalidateQuizCaches } from '../../quiz/quiz.cache';
@@ -34,7 +34,7 @@ async function withUniqueCheck<T>(work: () => Promise<T>, message: string) {
 // ---------------------------------------------------------------------------
 
 export async function getQuizOverview() {
-  const [exams, subjects, counts] = await Promise.all([
+  const [exams, subjects, counts, coverage, statusCounts, missingExplanations, unassignedExam] = await Promise.all([
     prisma.exam.findMany({ orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] }),
     prisma.subject.findMany({
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
@@ -43,6 +43,20 @@ export async function getQuizOverview() {
     prisma.question.groupBy({
       by: ['subjectId', 'status'],
       _count: { _all: true },
+    }),
+    prisma.question.groupBy({
+      by: ['examId', 'subjectId', 'topicId', 'status'],
+      _count: { _all: true },
+    }),
+    prisma.question.groupBy({ by: ['status'], _count: { _all: true } }),
+    prisma.question.count({
+      where: {
+        status: QuestionStatus.PUBLISHED,
+        OR: [{ explanation: null }, { explanation: '' }],
+      },
+    }),
+    prisma.question.count({
+      where: { status: QuestionStatus.PUBLISHED, examId: null },
     }),
   ]);
 
@@ -54,6 +68,18 @@ export async function getQuizOverview() {
       status: row.status,
       count: row._count._all,
     })),
+    coverage: coverage.map((row) => ({
+      examId: row.examId,
+      subjectId: row.subjectId,
+      topicId: row.topicId,
+      status: row.status,
+      count: row._count._all,
+    })),
+    quality: {
+      byStatus: Object.fromEntries(statusCounts.map((row) => [row.status, row._count._all])),
+      missingExplanations,
+      unassignedExam,
+    },
   };
 }
 
@@ -209,7 +235,13 @@ export async function importQuestions(rows: unknown[]) {
 export async function updateQuestion(questionId: string, input: UpdateQuestionInput) {
   const existing = await prisma.question.findUnique({
     where: { id: questionId },
-    select: { options: true, correctOptionId: true },
+    select: {
+      options: true,
+      correctOptionId: true,
+      explanation: true,
+      examId: true,
+      status: true,
+    },
   });
   if (!existing) {
     throw new AppError(404, 'Question not found');
@@ -219,6 +251,17 @@ export async function updateQuestion(questionId: string, input: UpdateQuestionIn
   const correctOptionId = input.correctOptionId ?? existing.correctOptionId;
   if (!options.some((option) => option.id === correctOptionId)) {
     throw new AppError(400, 'correctOptionId must match one of the options');
+  }
+  const nextStatus = input.status ?? existing.status;
+  const nextExplanation =
+    input.explanation === undefined ? existing.explanation : input.explanation;
+  if (nextStatus === QuestionStatus.PUBLISHED) {
+    if (!existing.examId) {
+      throw new AppError(409, 'Assign an examination before publishing this question');
+    }
+    if (!nextExplanation?.trim()) {
+      throw new AppError(409, 'Add a reviewed explanation before publishing this question');
+    }
   }
 
   const question = await prisma.question.update({
@@ -230,6 +273,24 @@ export async function updateQuestion(questionId: string, input: UpdateQuestionIn
 }
 
 export async function setQuestionStatus(input: SetQuestionStatusInput) {
+  if (input.status === QuestionStatus.PUBLISHED) {
+    const blocked = await prisma.question.count({
+      where: {
+        id: { in: input.questionIds },
+        OR: [
+          { examId: null },
+          { explanation: null },
+          { explanation: '' },
+        ],
+      },
+    });
+    if (blocked > 0) {
+      throw new AppError(
+        409,
+        `${blocked} selected ${blocked === 1 ? 'question needs' : 'questions need'} an examination and reviewed explanation before publishing`,
+      );
+    }
+  }
   const { count } = await prisma.question.updateMany({
     where: { id: { in: input.questionIds } },
     data: { status: input.status },
@@ -249,6 +310,11 @@ export async function listQuestions(query: ListQuestionsQuery) {
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: query.limit + 1,
     ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
+    include: {
+      exam: { select: { id: true, name: true, slug: true } },
+      subject: { select: { id: true, name: true, slug: true } },
+      topic: { select: { id: true, name: true, slug: true } },
+    },
   });
 
   const hasMore = rows.length > query.limit;

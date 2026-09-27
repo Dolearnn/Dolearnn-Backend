@@ -126,7 +126,7 @@ function assertActive(user: Pick<User, 'status'>) {
   }
 }
 
-export async function registerParent(input: RegisterInput) {
+export async function registerAccount(input: RegisterInput) {
   const email = normalizeEmail(input.email);
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
@@ -136,6 +136,7 @@ export async function registerParent(input: RegisterInput) {
   const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
   const name = input.name.trim();
   const whatsapp = input.whatsapp?.trim() || null;
+  const isStudent = input.accountType === Role.STUDENT;
 
   const user = await prisma.$transaction(async (tx) => {
     const created = await tx.user.create({
@@ -144,19 +145,19 @@ export async function registerParent(input: RegisterInput) {
         name,
         passwordHash,
         authProvider: AuthProvider.EMAIL,
-        role: Role.PARENT,
-        parentProfile: {
-          create: {
-            whatsapp,
-          },
-        },
+        role: input.accountType,
+        ...(isStudent
+          ? { learnerProfile: { create: {} } }
+          : { parentProfile: { create: { whatsapp } } }),
       },
     });
 
     await createAdminNotifications(
       {
-        title: 'New family registered',
-        body: `${name} just signed up. Email: ${email}. WhatsApp: ${whatsapp ?? 'not provided'}.`,
+        title: isStudent ? 'New learner registered' : 'New family registered',
+        body: isStudent
+          ? `${name} just created a learner account. Email: ${email}.`
+          : `${name} just signed up. Email: ${email}. WhatsApp: ${whatsapp ?? 'not provided'}.`,
       },
       tx,
     );
@@ -230,6 +231,7 @@ export async function loginOrRegisterWithGoogle(input: GoogleAuthInput) {
   });
 
   if (!existingByEmail) {
+    const isStudent = input.accountType === Role.STUDENT;
     const user = await prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
         data: {
@@ -237,17 +239,17 @@ export async function loginOrRegisterWithGoogle(input: GoogleAuthInput) {
           name: googleUser.name,
           googleId: googleUser.googleId,
           authProvider: AuthProvider.GOOGLE,
-          role: Role.PARENT,
-          parentProfile: {
-            create: {},
-          },
+          role: input.accountType,
+          ...(isStudent
+            ? { learnerProfile: { create: {} } }
+            : { parentProfile: { create: {} } }),
         },
       });
 
       await createAdminNotifications(
         {
-          title: 'New family registered',
-          body: `${googleUser.name} just signed up with Google. Email: ${googleUser.email}.`,
+          title: isStudent ? 'New learner registered' : 'New family registered',
+          body: `${googleUser.name} just signed up with Google as ${isStudent ? 'a learner' : 'a family'}. Email: ${googleUser.email}.`,
         },
         tx,
       );
@@ -261,10 +263,6 @@ export async function loginOrRegisterWithGoogle(input: GoogleAuthInput) {
 
   if (existingByEmail.role === Role.TEACHER && !existingByEmail.teacherProfile) {
     throw new AppError(403, 'Teacher account must be created by admin first');
-  }
-
-  if (existingByEmail.role === Role.STUDENT) {
-    throw new AppError(403, 'Student accounts cannot use this login flow');
   }
 
   const updated = await prisma.user.update({
