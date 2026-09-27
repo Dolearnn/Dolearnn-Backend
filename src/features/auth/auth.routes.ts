@@ -17,7 +17,7 @@ import {
   loginOrRegisterWithGoogle,
   loginWithPassword,
   logoutUser,
-  registerParent,
+  registerAccount,
   resetPassword,
 } from './auth.service';
 
@@ -33,7 +33,7 @@ authRoutes.post(
   }),
   asyncHandler(async (req, res) => {
     const input = registerSchema.parse(req.body);
-    const result = await registerParent(input);
+    const result = await registerAccount(input);
     res.status(201).json(result);
   }),
 );

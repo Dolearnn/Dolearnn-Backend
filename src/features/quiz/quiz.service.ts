@@ -796,12 +796,10 @@ type NextAction = {
   } | null;
 };
 
-export async function getNextActions(user: QuizUser, query: ProgressQuery) {
-  const [progress, weak] = await Promise.all([
-    getProgress(user, query),
-    getWeakTopics(user, query),
-  ]);
+type ProgressResult = Awaited<ReturnType<typeof getProgress>>;
+type WeakTopicsResult = Awaited<ReturnType<typeof getWeakTopics>>;
 
+function buildNextActions(progress: ProgressResult, weak: WeakTopicsResult) {
   if (progress.totalAttempts === 0) {
     return {
       actions: [
@@ -818,16 +816,20 @@ export async function getNextActions(user: QuizUser, query: ProgressQuery) {
     };
   }
 
-  const actions: NextAction[] = [];
+  const practiceActions: NextAction[] = [];
+  const reassessmentActions: NextAction[] = [];
+  const supportActions: NextAction[] = [];
   const now = Date.now();
 
-  // 1. Struggle that has persisted across two or more quizzes goes to a tutor.
+  // Work out where human support may be useful, but keep it behind the
+  // learning actions. A teacher is an intervention after repeated evidence,
+  // not the first destination after a low score.
   for (const subject of progress.subjects) {
     const persistent = subject.topics.filter((topic) => topic.latestPercent < WEAK_TOPIC_BELOW_PERCENT);
     const suggestion = weak.tutoring.find((entry) => entry.subject.id === subject.subject.id);
     if (persistent.length === 0 || !suggestion) continue;
 
-    actions.push({
+    supportActions.push({
       id: `tutor-${subject.subject.id}`,
       type: 'TUTOR',
       title: `Get a tutor for ${subject.subject.name}`,
@@ -855,15 +857,13 @@ export async function getNextActions(user: QuizUser, query: ProgressQuery) {
     });
   }
 
-  // 2. A short mission for the weakest topics that are not already going to a tutor.
-  const tutoredTopicIds = new Set(
-    actions.flatMap((action) => action.tutoring?.weakTopics.map((topic) => topic.topicId) ?? []),
-  );
+  // 1. Give every weak topic a short, focused mission, including topics that
+  // may also need a teacher. Practice remains the student's next action.
   weak.topics
-    .filter((topic) => topic.isWeak && !tutoredTopicIds.has(topic.topicId))
+    .filter((topic) => topic.isWeak)
     .slice(0, MAX_PRACTISE_ACTIONS)
     .forEach((topic) => {
-      actions.push({
+      practiceActions.push({
         id: `practise-${topic.topicId}`,
         type: 'PRACTISE_TOPIC',
         title: `Practise ${topic.name}`,
@@ -878,7 +878,7 @@ export async function getNextActions(user: QuizUser, query: ProgressQuery) {
       });
     });
 
-  // 3. Reassess: one quiz cannot show progress, and old results go stale.
+  // 2. Reassess: one quiz cannot show progress, and old results go stale.
   for (const subject of progress.subjects) {
     const last = subject.trend[subject.trend.length - 1];
     const lastAt = last?.submittedAt ? new Date(last.submittedAt).getTime() : now;
@@ -892,7 +892,7 @@ export async function getNextActions(user: QuizUser, query: ProgressQuery) {
     }
     if (!reason) continue;
 
-    actions.push({
+    reassessmentActions.push({
       id: `reassess-${subject.subject.id}`,
       type: 'REASSESS',
       title: `Reassess ${subject.subject.name}`,
@@ -906,5 +906,84 @@ export async function getNextActions(user: QuizUser, query: ProgressQuery) {
     });
   }
 
-  return { actions: actions.slice(0, MAX_NEXT_ACTIONS) };
+  // Preserve room for one support recommendation without allowing it to take
+  // over the learning plan. The API order is also the visual priority in the
+  // student experience: practise, reassess, then get human support if needed.
+  const learningActions = [...practiceActions, ...reassessmentActions];
+  const actions = [
+    ...learningActions.slice(0, supportActions.length > 0 ? MAX_NEXT_ACTIONS - 1 : MAX_NEXT_ACTIONS),
+    ...supportActions.slice(0, 1),
+  ];
+
+  return { actions };
+}
+
+export async function getNextActions(user: QuizUser, query: ProgressQuery) {
+  const [progress, weak] = await Promise.all([
+    getProgress(user, query),
+    getWeakTopics(user, query),
+  ]);
+  return buildNextActions(progress, weak);
+}
+
+// One round trip for the practice home. The independent database reads run in
+// parallel, and next actions reuse the same progress and weak-topic results
+// instead of querying them a second time.
+export async function getPracticeOverview(user: QuizUser, query: ProgressQuery) {
+  const [rawCatalog, history, progress, weak, learnerProfile] = await Promise.all([
+    getCatalog(),
+    listAttempts(user, { limit: 6 }),
+    getProgress(user, query),
+    getWeakTopics(user, query),
+    user.role === Role.STUDENT
+      ? prisma.learnerProfile.findUnique({
+          where: { userId: user.id },
+          select: { externalExams: true, subjectIds: true },
+        })
+      : null,
+  ]);
+
+  const selectedExamNames = new Set(
+    (learnerProfile?.externalExams ?? []).map((name) => name.trim().toLowerCase()),
+  );
+  const matchedExams = rawCatalog.exams.filter((exam) =>
+    selectedExamNames.has(exam.name.trim().toLowerCase()),
+  );
+  const selectedSubjectIds = new Set(learnerProfile?.subjectIds ?? []);
+  const visibleSubjects = selectedSubjectIds.size
+    ? rawCatalog.subjects.filter((subject) => selectedSubjectIds.has(subject.id))
+    : rawCatalog.subjects;
+  // A custom examination can be saved before its content is configured. Keep
+  // available content visible in that case and tell the client which goals are
+  // still unavailable instead of presenting an empty product.
+  const visibleExams = matchedExams.length > 0 ? matchedExams : rawCatalog.exams;
+  const visibleExamIds = new Set(visibleExams.map((exam) => exam.id));
+  const visibleSubjectIds = new Set(visibleSubjects.map((subject) => subject.id));
+  const catalog = {
+    exams: visibleExams,
+    subjects: visibleSubjects,
+    availability: rawCatalog.availability.filter(
+      (row) =>
+        visibleSubjectIds.has(row.subjectId) &&
+        (row.examId === null || visibleExamIds.has(row.examId)),
+    ),
+  };
+  const matchedExamNames = new Set(matchedExams.map((exam) => exam.name.trim().toLowerCase()));
+
+  return {
+    catalog,
+    history,
+    progress,
+    weak,
+    learningPlan: learnerProfile
+      ? {
+          externalExams: learnerProfile.externalExams,
+          unavailableExams: learnerProfile.externalExams.filter(
+            (name) => !matchedExamNames.has(name.trim().toLowerCase()),
+          ),
+          subjectIds: learnerProfile.subjectIds,
+        }
+      : null,
+    ...buildNextActions(progress, weak),
+  };
 }
