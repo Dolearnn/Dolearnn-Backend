@@ -118,6 +118,7 @@ async function main() {
       email: familyEmail,
       password: 'SmokeFamily123#',
       whatsapp: '+234 800 000 0000',
+      accountType: 'PARENT',
     }),
     label: 'family register',
   });

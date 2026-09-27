@@ -1,10 +1,14 @@
+import { Role } from '@prisma/client';
 import { z } from 'zod';
+
+const selfServiceRole = z.enum([Role.STUDENT, Role.PARENT]);
 
 export const registerSchema = z.object({
   name: z.string().trim().min(2, 'Name is required'),
   email: z.string().trim().email('Valid email is required'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   whatsapp: z.string().trim().optional(),
+  accountType: selfServiceRole.default(Role.STUDENT),
 });
 
 export const loginSchema = z.object({
@@ -14,6 +18,7 @@ export const loginSchema = z.object({
 
 export const googleAuthSchema = z.object({
   idToken: z.string().min(1, 'Google ID token is required'),
+  accountType: selfServiceRole.default(Role.STUDENT),
 });
 
 export const changePasswordSchema = z.object({
