@@ -7,6 +7,7 @@ import { notificationRoutes } from '../features/notifications/notification.route
 import { publicRoutes } from '../features/public/public.routes';
 import { quizRoutes } from '../features/quiz/quiz.routes';
 import { teacherRoutes } from '../features/teacher/teacher.routes';
+import { studentRoutes } from '../features/student/student.routes';
 import { healthRoutes } from './health.routes';
 
 export const routes = Router();
@@ -19,4 +20,5 @@ routes.use('/notifications', notificationRoutes);
 routes.use('/public', publicRoutes);
 routes.use('/quiz', quizRoutes);
 routes.use('/teacher', teacherRoutes);
+routes.use('/student', studentRoutes);
 routes.use('/health', healthRoutes);
