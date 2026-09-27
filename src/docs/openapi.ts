@@ -67,6 +67,11 @@ export const openApiSpec = swaggerJSDoc({
             email: { type: 'string', example: 'amara@example.com' },
             password: { type: 'string', example: 'Password123' },
             whatsapp: { type: 'string', example: '+447700900123' },
+            accountType: {
+              type: 'string',
+              enum: ['STUDENT', 'PARENT'],
+              default: 'STUDENT',
+            },
           },
         },
         LoginInput: {
@@ -82,6 +87,11 @@ export const openApiSpec = swaggerJSDoc({
           required: ['idToken'],
           properties: {
             idToken: { type: 'string' },
+            accountType: {
+              type: 'string',
+              enum: ['STUDENT', 'PARENT'],
+              default: 'STUDENT',
+            },
           },
         },
         CreateTeacherInput: {
@@ -290,7 +300,7 @@ export const openApiSpec = swaggerJSDoc({
       '/api/auth/register': {
         post: {
           tags: ['Auth'],
-          summary: 'Register a family account',
+          summary: 'Register a learner or family account',
           requestBody: {
             required: true,
             content: {
