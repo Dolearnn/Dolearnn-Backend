@@ -193,26 +193,26 @@ enum AuditEntityType {
 }
 
 model User {
-  id           String        @id @default(cuid())
-  email        String        @unique
-  passwordHash String?
-  googleId     String?       @unique
-  authProvider AuthProvider  @default(EMAIL)
-  name         String
-  role         Role
-  status       AccountStatus @default(ACTIVE)
-  tokenVersion Int           @default(0)
-  mustChangePassword Boolean @default(false)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id                 String        @id @default(cuid())
+  email              String        @unique
+  passwordHash       String?
+  googleId           String?       @unique
+  authProvider       AuthProvider  @default(EMAIL)
+  name               String
+  role               Role
+  status             AccountStatus @default(ACTIVE)
+  tokenVersion       Int           @default(0)
+  mustChangePassword Boolean       @default(false)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
-  parentProfile  ParentProfile?
-  learnerProfile LearnerProfile?
-  teacherProfile TeacherProfile?
-  notifications  Notification[]
-  auditLogs      AuditLog[]
-  quizAttempts   QuizAttempt[]
-  topicStats     UserTopicStat[]
+  parentProfile   ParentProfile?
+  learnerProfile  LearnerProfile?
+  teacherProfile  TeacherProfile?
+  notifications   Notification[]
+  auditLogs       AuditLog[]
+  quizAttempts    QuizAttempt[]
+  topicStats      UserTopicStat[]
   arenaChallenges ArenaChallenge[]
   arenaEntries    ArenaEntry[]
 }
@@ -220,16 +220,16 @@ model User {
 // A self-directed learner account. This is separate from `Student`, which is
 // a child profile owned and monitored by a parent account.
 model LearnerProfile {
-  id                  String   @id @default(cuid())
-  userId              String   @unique
+  id                  String    @id @default(cuid())
+  userId              String    @unique
   stage               String?
-  externalExams       String[] @default([])
-  subjectIds          String[] @default([])
+  externalExams       String[]  @default([])
+  subjectIds          String[]  @default([])
   examDate            DateTime?
-  onboardingCompleted Boolean  @default(false)
+  onboardingCompleted Boolean   @default(false)
   guestBaseline       Json?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -241,19 +241,19 @@ model ParentProfile {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  students Student[]
-  payments Payment[]
-  lessonPackages StudentLessonPackage[]
+  user            User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  students        Student[]
+  payments        Payment[]
+  lessonPackages  StudentLessonPackage[]
   bookingRequests SessionBookingRequest[]
 }
 
 model TeacherProfile {
-  id                String        @id @default(cuid())
-  userId            String        @unique
+  id                String         @id @default(cuid())
+  userId            String         @unique
   firstName         String
   lastName          String
-  timezone          String        @default("Africa/Lagos")
+  timezone          String         @default("Africa/Lagos")
   phoneCountry      String?
   phoneNumber       String?
   gender            TeacherGender?
@@ -263,25 +263,25 @@ model TeacherProfile {
   bankName          String?
   accountName       String?
   accountNumber     String?
-  hourlyRate        Decimal       @default(0) @db.Decimal(10, 2)
-  rating            Decimal       @default(0) @db.Decimal(3, 2)
-  totalSessions     Int           @default(0)
-  status            AccountStatus @default(ACTIVE)
+  hourlyRate        Decimal        @default(0) @db.Decimal(10, 2)
+  rating            Decimal        @default(0) @db.Decimal(3, 2)
+  totalSessions     Int            @default(0)
+  status            AccountStatus  @default(ACTIVE)
   terminationReason String?
   terminatedAt      DateTime?
-  joinedAt          DateTime      @default(now())
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  joinedAt          DateTime       @default(now())
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 
-  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  assignedStudents Student[]         @relation("AssignedTeacher")
+  user               User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedStudents   Student[]                  @relation("AssignedTeacher")
   subjectAssignments StudentSubjectAssignment[]
-  sessions         Session[]
-  proposals        SessionProposal[]
-  notes            SessionNote[]
-  payouts          TeacherPayout[]
-  notifications    Notification[]    @relation("TeacherNotifications")
-  auditLogs        AuditLog[]        @relation("TeacherAuditLogs")
+  sessions           Session[]
+  proposals          SessionProposal[]
+  notes              SessionNote[]
+  payouts            TeacherPayout[]
+  notifications      Notification[]             @relation("TeacherNotifications")
+  auditLogs          AuditLog[]                 @relation("TeacherAuditLogs")
 }
 
 model Student {
@@ -299,19 +299,19 @@ model Student {
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
-  parent          ParentProfile     @relation(fields: [parentId], references: [id], onDelete: Cascade)
-  assignedTeacher TeacherProfile?   @relation("AssignedTeacher", fields: [assignedTeacherId], references: [id], onDelete: SetNull)
+  parent             ParentProfile              @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  assignedTeacher    TeacherProfile?            @relation("AssignedTeacher", fields: [assignedTeacherId], references: [id], onDelete: SetNull)
   subjectAssignments StudentSubjectAssignment[]
-  intake          Intake?
-  goals           Goal[]
-  sessions        Session[]
-  lessonPackages  StudentLessonPackage[]
-  proposals       SessionProposal[]
-  notifications   Notification[]
-  auditLogs       AuditLog[]
-  bookingRequests SessionBookingRequest[]
-  quizAttempts    QuizAttempt[]
-  arenaEntries    ArenaEntry[]
+  intake             Intake?
+  goals              Goal[]
+  sessions           Session[]
+  lessonPackages     StudentLessonPackage[]
+  proposals          SessionProposal[]
+  notifications      Notification[]
+  auditLogs          AuditLog[]
+  bookingRequests    SessionBookingRequest[]
+  quizAttempts       QuizAttempt[]
+  arenaEntries       ArenaEntry[]
 
   @@index([parentId])
   @@index([assignedTeacherId])
@@ -395,7 +395,7 @@ model Intake {
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
-  student  Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student  Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
   schedule IntakeSchedule[]
 }
 
@@ -425,21 +425,21 @@ model Goal {
 }
 
 model SessionProposal {
-  id           String         @id @default(cuid())
-  studentId    String
-  teacherId    String
-  subject      String
-  startsAt     DateTime
-  durationMins Int
-  timeBlock    TimeBlock
-  note         String?
-  status       ProposalStatus @default(PENDING)
-  declineReason String?
-  preferredAlternativeDay DayOfWeek?
-  preferredAlternativeTime TimeBlock?
+  id                            String         @id @default(cuid())
+  studentId                     String
+  teacherId                     String
+  subject                       String
+  startsAt                      DateTime
+  durationMins                  Int
+  timeBlock                     TimeBlock
+  note                          String?
+  status                        ProposalStatus @default(PENDING)
+  declineReason                 String?
+  preferredAlternativeDay       DayOfWeek?
+  preferredAlternativeTime      TimeBlock?
   preferredAlternativeExactTime String?
-  createdAt    DateTime       @default(now())
-  resolvedAt   DateTime?
+  createdAt                     DateTime       @default(now())
+  resolvedAt                    DateTime?
 
   student Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
   teacher TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
@@ -451,26 +451,26 @@ model SessionProposal {
 }
 
 model Session {
-  id           String        @id @default(cuid())
-  studentId    String
-  teacherId    String
+  id              String        @id @default(cuid())
+  studentId       String
+  teacherId       String
   lessonPackageId String?
-  proposalId   String?       @unique
-  subject      String
-  startsAt     DateTime
-  durationMins Int
-  meetLink     String?
-  status       SessionStatus @default(UPCOMING)
-  amount       Decimal       @default(0) @db.Decimal(10, 2)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  proposalId      String?       @unique
+  subject         String
+  startsAt        DateTime
+  durationMins    Int
+  meetLink        String?
+  status          SessionStatus @default(UPCOMING)
+  amount          Decimal       @default(0) @db.Decimal(10, 2)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
-  student      Student              @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  teacher      TeacherProfile       @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  student       Student               @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacher       TeacherProfile        @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   lessonPackage StudentLessonPackage? @relation(fields: [lessonPackageId], references: [id], onDelete: SetNull)
-  proposal     SessionProposal?     @relation(fields: [proposalId], references: [id], onDelete: SetNull)
-  attendance   Attendance?
-  note         SessionNote?
+  proposal      SessionProposal?      @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+  attendance    Attendance?
+  note          SessionNote?
   cancellations CancellationRequest[]
 
   @@index([studentId, startsAt])
@@ -480,12 +480,12 @@ model Session {
 }
 
 model Attendance {
-  id                String    @id @default(cuid())
-  sessionId         String    @unique
+  id                 String    @id @default(cuid())
+  sessionId          String    @unique
   teacherConfirmedAt DateTime?
   familyConfirmedAt  DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
@@ -565,25 +565,25 @@ model Notification {
   teacherId String?
   createdAt DateTime @default(now())
 
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  student Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  student Student?        @relation(fields: [studentId], references: [id], onDelete: SetNull)
   teacher TeacherProfile? @relation("TeacherNotifications", fields: [teacherId], references: [id], onDelete: SetNull)
 
   @@index([userId, read, createdAt])
 }
 
 model Lead {
-  id        String     @id @default(cuid())
-  source    LeadSource
-  status    LeadStatus @default(NEW)
-  fullName  String?
-  email     String
-  phone     String?
-  userType  String?
-  submissionCount Int  @default(1)
-  lastSubmittedAt DateTime @default(now())
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id              String     @id @default(cuid())
+  source          LeadSource
+  status          LeadStatus @default(NEW)
+  fullName        String?
+  email           String
+  phone           String?
+  userType        String?
+  submissionCount Int        @default(1)
+  lastSubmittedAt DateTime   @default(now())
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 
   @@unique([source, email])
   @@index([source, status, createdAt])
@@ -610,8 +610,8 @@ model Exam {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  questions Question[]
-  attempts  QuizAttempt[]
+  questions       Question[]
+  attempts        QuizAttempt[]
   arenaChallenges ArenaChallenge[]
 }
 
@@ -624,9 +624,9 @@ model Subject {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  topics    Topic[]
-  questions Question[]
-  attempts  QuizAttempt[]
+  topics          Topic[]
+  questions       Question[]
+  attempts        QuizAttempt[]
   arenaChallenges ArenaChallenge[]
 }
 
@@ -665,9 +665,9 @@ model Question {
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
-  exam    Exam?   @relation(fields: [examId], references: [id], onDelete: SetNull)
-  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Restrict)
-  topic   Topic   @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  exam          Exam?                @relation(fields: [examId], references: [id], onDelete: SetNull)
+  subject       Subject              @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  topic         Topic                @relation(fields: [topicId], references: [id], onDelete: Restrict)
   aiExplanation QuestionExplanation?
 
   @@index([subjectId, examId, status])
@@ -700,34 +700,39 @@ model QuestionExplanation {
 }
 
 model QuizAttempt {
-  id             String            @id @default(cuid())
-  userId         String
+  id                String            @id @default(cuid())
+  userId            String
   // Set when a parent takes the quiz on behalf of one of their children.
-  studentId      String?
-  examId         String?
-  subjectId      String
-  mode           QuizMode
-  status         QuizAttemptStatus @default(IN_PROGRESS)
+  studentId         String?
+  examId            String?
+  subjectId         String
+  mode              QuizMode
+  status            QuizAttemptStatus @default(IN_PROGRESS)
   // Ordered snapshot of the questions served, so grading never depends on the
   // question bank staying the same.
-  questionIds    String[]
-  totalQuestions Int
-  timeLimitSecs  Int?
-  startedAt      DateTime          @default(now())
-  expiresAt      DateTime?
-  submittedAt    DateTime?
-  correctCount   Int?
-  scorePercent   Int?
-  timedOut       Boolean           @default(false)
+  questionIds       String[]
+  totalQuestions    Int
+  timeLimitSecs     Int?
+  startedAt         DateTime          @default(now())
+  expiresAt         DateTime?
+  submittedAt       DateTime?
+  correctCount      Int?
+  scorePercent      Int?
+  timedOut          Boolean           @default(false)
   // { "<questionId>": "<optionId>" }
-  answers        Json?
+  answers           Json?
   // [{ "topicId", "name", "attempted", "correct" }]
-  topicBreakdown Json?
+  topicBreakdown    Json?
+  // Set when this attempt re-tests the weak topics of an earlier attempt, so
+  // the two can be compared topic by topic (before vs after).
+  retakeOfAttemptId String?
 
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  student Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
-  exam    Exam?    @relation(fields: [examId], references: [id], onDelete: SetNull)
-  subject Subject  @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  retakeOf   QuizAttempt?      @relation("AttemptRetakes", fields: [retakeOfAttemptId], references: [id], onDelete: SetNull)
+  retakes    QuizAttempt[]     @relation("AttemptRetakes")
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  student    Student?          @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  exam       Exam?             @relation(fields: [examId], references: [id], onDelete: SetNull)
+  subject    Subject           @relation(fields: [subjectId], references: [id], onDelete: Restrict)
   arenaEntry ArenaEntry?
   diagnosis  AttemptDiagnosis?
 
@@ -735,6 +740,7 @@ model QuizAttempt {
   @@index([userId, subjectId, startedAt])
   @@index([userId, status])
   @@index([studentId, startedAt])
+  @@index([retakeOfAttemptId])
 }
 
 // Running per-topic totals for a learner, updated once per submitted attempt.

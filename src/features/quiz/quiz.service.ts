@@ -43,6 +43,9 @@ const RECENT_ATTEMPTS_FOR_VARIETY = 3;
 // A topic needs this many answered questions before we call it weak.
 const MIN_TOPIC_SAMPLE = 3;
 const WEAK_TOPIC_BELOW_PERCENT = 60;
+// A retake asks about as many questions as the original did on the same topics.
+const RETAKE_MIN_QUESTIONS = 5;
+const RETAKE_MAX_QUESTIONS = 20;
 const SUGGEST_TUTORING_BELOW_PERCENT = 75;
 // Progress looks at this many of a learner's most recent submitted attempts.
 const PROGRESS_ATTEMPT_LIMIT = 200;
@@ -165,6 +168,7 @@ export function attemptSummary(attempt: AttemptRow) {
     startedAt: attempt.startedAt,
     expiresAt: attempt.expiresAt,
     submittedAt: attempt.submittedAt,
+    retakeOfAttemptId: attempt.retakeOfAttemptId,
   };
 }
 
@@ -227,13 +231,60 @@ async function previousAttemptComparison(attempt: AttemptRow, scorePercent: numb
   };
 }
 
+// Before vs after for a retake: each topic the retake covered, scored in the
+// original attempt and in the retake. Totals use only those topics, so the
+// comparison is like for like.
+async function retakeComparison(attempt: AttemptRow, breakdown: TopicBreakdown[]) {
+  if (!attempt.retakeOfAttemptId) return null;
+
+  const original = await prisma.quizAttempt.findFirst({
+    where: { id: attempt.retakeOfAttemptId, userId: attempt.userId },
+    select: { id: true, submittedAt: true, topicBreakdown: true },
+  });
+  if (!original) return null;
+
+  const before = new Map(
+    ((original.topicBreakdown ?? []) as TopicBreakdown[]).map((topic) => [topic.topicId, topic]),
+  );
+  const topics = breakdown
+    .filter((topic) => before.has(topic.topicId))
+    .map((topic) => {
+      const was = before.get(topic.topicId)!;
+      return {
+        topicId: topic.topicId,
+        name: topic.name,
+        beforePercent: percent(was.correct, was.attempted),
+        afterPercent: percent(topic.correct, topic.attempted),
+      };
+    });
+  if (topics.length === 0) return null;
+
+  const sum = (list: TopicBreakdown[], key: 'correct' | 'attempted') =>
+    list.reduce((total, topic) => total + topic[key], 0);
+  const covered = new Set(topics.map((topic) => topic.topicId));
+  const beforeTopics = [...before.values()].filter((topic) => covered.has(topic.topicId));
+  const afterTopics = breakdown.filter((topic) => covered.has(topic.topicId));
+  const beforePercent = percent(sum(beforeTopics, 'correct'), sum(beforeTopics, 'attempted'));
+  const afterPercent = percent(sum(afterTopics, 'correct'), sum(afterTopics, 'attempted'));
+
+  return {
+    originalAttemptId: original.id,
+    originalSubmittedAt: original.submittedAt,
+    beforePercent,
+    afterPercent,
+    changePoints: afterPercent - beforePercent,
+    topics,
+  };
+}
+
 async function submittedAttemptView(attempt: AttemptRow) {
   const answers = (attempt.answers ?? {}) as Record<string, string>;
   const breakdown = (attempt.topicBreakdown ?? []) as TopicBreakdown[];
   const scorePercent = attempt.scorePercent ?? 0;
-  const [questions, comparison] = await Promise.all([
+  const [questions, comparison, retake] = await Promise.all([
     loadQuestionsInOrder(attempt.questionIds, false),
     previousAttemptComparison(attempt, scorePercent),
+    retakeComparison(attempt, breakdown),
   ]);
 
   return {
@@ -249,6 +300,7 @@ async function submittedAttemptView(attempt: AttemptRow) {
       })),
       tutoring: tutoringSuggestion(attempt, breakdown, scorePercent),
       comparison,
+      retake,
     },
     review: questions.map((question) => {
       const yourAnswer = answers[question.id] ?? null;
@@ -276,7 +328,44 @@ export async function getCatalog() {
 // Attempts
 // ---------------------------------------------------------------------------
 
-export async function startAttempt(user: QuizUser, input: StartAttemptInput) {
+// Turns a retake request into a normal start request: same learner, subject and
+// exam as the original, limited to the topics it found weak (all of its topics
+// when none were weak), with about as many questions as the original asked on
+// them. Questions from the original are avoided when the pool allows.
+async function retakePlan(user: QuizUser, input: StartAttemptInput) {
+  const original = await findOwnAttempt(user.id, input.retakeOfAttemptId!);
+  if (original.status !== QuizAttemptStatus.SUBMITTED) {
+    throw new AppError(409, 'Finish this quiz before retaking it');
+  }
+
+  const breakdown = (original.topicBreakdown ?? []) as TopicBreakdown[];
+  const weak = breakdown.filter(
+    (topic) => percent(topic.correct, topic.attempted) < WEAK_TOPIC_BELOW_PERCENT,
+  );
+  const targets = weak.length > 0 ? weak : breakdown;
+  if (targets.length === 0) {
+    throw new AppError(409, 'This quiz has no topics to retake');
+  }
+  const asked = targets.reduce((sum, topic) => sum + topic.attempted, 0);
+
+  return {
+    input: {
+      ...input,
+      subjectId: original.subjectId,
+      examId: original.examId ?? undefined,
+      studentId: original.studentId ?? undefined,
+      topicIds: targets.map((topic) => topic.topicId),
+      count: Math.min(Math.max(asked, RETAKE_MIN_QUESTIONS), RETAKE_MAX_QUESTIONS),
+      mode: QuizMode.PRACTICE,
+    },
+    originalId: original.id,
+    avoid: original.questionIds,
+  };
+}
+
+export async function startAttempt(user: QuizUser, requested: StartAttemptInput) {
+  const retake = requested.retakeOfAttemptId ? await retakePlan(user, requested) : null;
+  const input = retake?.input ?? requested;
   const index = await getCatalogIndex();
   const subject = index.subjectsById.get(input.subjectId);
 
@@ -327,7 +416,10 @@ export async function startAttempt(user: QuizUser, input: StartAttemptInput) {
     }),
   ]);
 
-  const seen = new Set(recentAttempts.flatMap((attempt) => attempt.questionIds));
+  const seen = new Set([
+    ...recentAttempts.flatMap((attempt) => attempt.questionIds),
+    ...(retake?.avoid ?? []),
+  ]);
   const count = Math.min(input.count, eligible.length);
   const questions = await loadQuestionsInOrder(
     pickQuestionIds(eligible, count, seen),
@@ -356,6 +448,7 @@ export async function startAttempt(user: QuizUser, input: StartAttemptInput) {
       timeLimitSecs,
       startedAt,
       expiresAt: timeLimitSecs ? new Date(startedAt.getTime() + timeLimitSecs * 1000) : null,
+      retakeOfAttemptId: retake?.originalId ?? null,
     },
     include: { subject: { select: { id: true, name: true } } },
   });

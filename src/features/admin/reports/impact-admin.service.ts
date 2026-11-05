@@ -34,6 +34,13 @@ type ImprovementRow = {
   avg_latest: number | null;
 };
 
+type RetakeRow = {
+  retakes: bigint;
+  improved: bigint;
+  avg_before: number | null;
+  avg_after: number | null;
+};
+
 type TutoringRow = {
   practised_before: bigint;
   practised_after: bigint;
@@ -62,6 +69,7 @@ async function buildImpactReport() {
     learnerRows,
     improvementRows,
     tutoringRows,
+    retakeRows,
   ] = await Promise.all([
     prisma.parentProfile.count(),
     prisma.student.count(),
@@ -152,6 +160,32 @@ async function buildImpactReport() {
              (AVG(after_avg) FILTER (WHERE before_avg IS NOT NULL AND after_avg IS NOT NULL))::float8 AS avg_after
       FROM per
     `),
+    // Retakes: each submitted retake against its original attempt, on the topics
+    // the retake targeted only, so before and after are like for like.
+    prisma.$queryRaw<RetakeRow[]>(Prisma.sql`
+      WITH rt AS (
+        SELECT r.id, r."topicBreakdown" AS after_b, o."topicBreakdown" AS before_b
+        FROM "QuizAttempt" r
+        JOIN "QuizAttempt" o ON o.id = r."retakeOfAttemptId"
+        WHERE r."status" = 'SUBMITTED' AND o."status" = 'SUBMITTED'
+          AND r."topicBreakdown" IS NOT NULL AND o."topicBreakdown" IS NOT NULL
+      ),
+      per AS (
+        SELECT rt.id,
+               SUM((b->>'correct')::int)::float8 * 100 / NULLIF(SUM((b->>'attempted')::int), 0) AS before_pct,
+               SUM((a->>'correct')::int)::float8 * 100 / NULLIF(SUM((a->>'attempted')::int), 0) AS after_pct
+        FROM rt
+        CROSS JOIN LATERAL jsonb_array_elements(rt.after_b) a
+        JOIN LATERAL jsonb_array_elements(rt.before_b) b ON b->>'topicId' = a->>'topicId'
+        GROUP BY rt.id
+      )
+      SELECT COUNT(*) AS retakes,
+             COUNT(*) FILTER (WHERE after_pct > before_pct) AS improved,
+             AVG(before_pct)::float8 AS avg_before,
+             AVG(after_pct)::float8 AS avg_after
+      FROM per
+      WHERE before_pct IS NOT NULL AND after_pct IS NOT NULL
+    `),
   ]);
 
   const learner = learnerRows[0];
@@ -164,6 +198,11 @@ async function buildImpactReport() {
   const avgFirst = improvement?.avg_first ?? null;
   const avgLatest = improvement?.avg_latest ?? null;
   const matched = asNumber(tutoring?.matched);
+  const retake = retakeRows[0];
+  const retakes = asNumber(retake?.retakes);
+  const retakesImproved = asNumber(retake?.improved);
+  const retakeBefore = retake?.avg_before ?? null;
+  const retakeAfter = retake?.avg_after ?? null;
 
   return {
     generatedAt: new Date().toISOString(),
@@ -194,6 +233,14 @@ async function buildImpactReport() {
       averageLatestScore: avgLatest === null ? null : round1(avgLatest),
       averageChangePoints:
         avgFirst === null || avgLatest === null ? null : round1(avgLatest - avgFirst),
+      // Targeted retakes: the like-for-like before vs after measure.
+      retakes,
+      retakesImproved,
+      retakesImprovedPercent: retakes === 0 ? 0 : Math.round((retakesImproved / retakes) * 100),
+      retakeAverageBefore: retakeBefore === null ? null : round1(retakeBefore),
+      retakeAverageAfter: retakeAfter === null ? null : round1(retakeAfter),
+      retakeAverageChangePoints:
+        retakeBefore === null || retakeAfter === null ? null : round1(retakeAfter - retakeBefore),
     },
     tutoring: {
       completedSessions,

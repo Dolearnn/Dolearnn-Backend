@@ -11,6 +11,9 @@ export const startAttemptSchema = z.object({
   mode: z.nativeEnum(QuizMode).default(QuizMode.PRACTICE),
   // A parent quizzing on behalf of one of their children.
   studentId: z.string().trim().min(1).optional(),
+  // Re-test the weak topics of this earlier (submitted) attempt. Subject,
+  // exam, learner and topics then come from that attempt.
+  retakeOfAttemptId: z.string().trim().min(1).optional(),
 });
 
 export const submitAttemptSchema = z.object({
