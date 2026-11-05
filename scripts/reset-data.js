@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const { PrismaClient, Role } = require('@prisma/client');
 
 const prisma = new PrismaClient();
