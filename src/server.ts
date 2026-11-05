@@ -1,5 +1,6 @@
 import { createApp } from './app';
 import { env } from './config/env';
+import { describeEmailConfig } from './lib/email';
 import { prisma } from './lib/prisma';
 
 const app = createApp();
@@ -14,6 +15,7 @@ void prisma
 
 const server = app.listen(env.PORT, () => {
   console.log(`DoLearn API listening on http://localhost:${env.PORT}`);
+  console.log(describeEmailConfig());
 });
 
 server.on('error', (error: NodeJS.ErrnoException) => {

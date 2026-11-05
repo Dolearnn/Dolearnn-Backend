@@ -57,13 +57,21 @@ async function sendWithResend(message: EmailMessage) {
   }
 
   const resend = new Resend(apiKey);
-  await resend.emails.send({
+  // The Resend SDK does not throw on API errors (bad key, unverified domain,
+  // rate limit); it returns them. Without this check failures are silent.
+  const { data, error } = await resend.emails.send({
     from,
     to: message.to,
     subject: message.subject,
     text: message.text,
     html: message.html,
   });
+
+  if (error) {
+    throw new Error(`Resend rejected the email to ${message.to}: ${error.name}: ${error.message}`);
+  }
+
+  return data?.id;
 }
 
 async function sendWithSendGrid(message: EmailMessage) {
@@ -76,30 +84,60 @@ async function sendWithSendGrid(message: EmailMessage) {
   }
 
   sgMail.setApiKey(apiKey);
-  await sgMail.send({
-    to: message.to,
-    from,
-    subject: message.subject,
-    text: message.text,
-    html: message.html,
-  });
+  try {
+    const [response] = await sgMail.send({
+      to: message.to,
+      from,
+      subject: message.subject,
+      text: message.text,
+      html: message.html,
+    });
+    return response.headers['x-message-id'] as string | undefined;
+  } catch (error) {
+    // SendGrid puts the useful reason in response.body.errors.
+    const details = (error as { response?: { body?: unknown } }).response?.body;
+    throw new Error(
+      `SendGrid rejected the email to ${message.to}: ${
+        details ? JSON.stringify(details) : (error as Error).message
+      }`,
+    );
+  }
 }
 
+/**
+ * Sends one email. Returns the provider's message id, or undefined when email
+ * is not configured (a warning is logged once). Throws when the provider
+ * rejects the message.
+ */
 export async function sendEmail(message: EmailMessage) {
   const configError = emailProviderConfigError();
   if (configError) {
     warnEmailDisabled();
-    return;
+    return undefined;
   }
 
-  if (env.EMAIL_PROVIDER === 'resend') {
-    await sendWithResend(message);
-    return;
-  }
+  const id =
+    env.EMAIL_PROVIDER === 'resend'
+      ? await sendWithResend(message)
+      : await sendWithSendGrid(message);
 
-  await sendWithSendGrid(message);
+  console.info(`Email sent via ${env.EMAIL_PROVIDER} to ${message.to}: "${message.subject}" (${id ?? 'no id'})`);
+  return id;
 }
 
+/** Sends every message; one failure does not stop the others. Failures are logged. */
 export async function sendBulkEmail(messages: EmailMessage[]) {
-  await Promise.all(messages.map((message) => sendEmail(message)));
+  const results = await Promise.allSettled(messages.map((message) => sendEmail(message)));
+  for (const result of results) {
+    if (result.status === 'rejected') {
+      console.error('Email delivery failed:', (result.reason as Error).message);
+    }
+  }
+}
+
+/** One-line description of the email setup, for the startup log. */
+export function describeEmailConfig() {
+  const error = emailProviderConfigError();
+  if (error) return `Email disabled: ${error}`;
+  return `Email enabled: ${env.EMAIL_PROVIDER} from ${fromAddress()}`;
 }

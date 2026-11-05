@@ -14,7 +14,8 @@
     "reset-data": "node scripts/reset-data.js",
     "add-indexes": "node scripts/add-indexes.js",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "email:test": "tsx scripts/test-email.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.127.0",

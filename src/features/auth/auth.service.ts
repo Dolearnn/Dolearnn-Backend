@@ -338,12 +338,18 @@ export async function forgotPassword(input: ForgotPasswordInput) {
   const token = signResetPasswordToken(user);
   const link = resetPasswordLink(token);
 
-  await sendEmail({
-    to: user.email,
-    subject: 'Reset your DoLearn password',
-    text: `We received a request to reset your DoLearn password. Open this link within ${env.RESET_PASSWORD_EXPIRES_IN_MINUTES} minutes: ${link}`,
-    html: `<p>We received a request to reset your DoLearn password.</p><p><a href="${link}">Reset your password</a></p><p>This link expires in ${env.RESET_PASSWORD_EXPIRES_IN_MINUTES} minutes.</p>`,
-  });
+  try {
+    await sendEmail({
+      to: user.email,
+      subject: 'Reset your DoLearn password',
+      text: `We received a request to reset your DoLearn password. Open this link within ${env.RESET_PASSWORD_EXPIRES_IN_MINUTES} minutes: ${link}`,
+      html: `<p>We received a request to reset your DoLearn password.</p><p><a href="${link}">Reset your password</a></p><p>This link expires in ${env.RESET_PASSWORD_EXPIRES_IN_MINUTES} minutes.</p>`,
+    });
+  } catch (error) {
+    // Log it, but answer exactly as for an unknown address so the endpoint
+    // never reveals which emails have accounts.
+    console.error('Password reset email failed:', (error as Error).message);
+  }
 }
 
 export async function resetPassword(input: ResetPasswordInput) {
