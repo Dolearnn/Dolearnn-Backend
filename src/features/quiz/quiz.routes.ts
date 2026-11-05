@@ -11,6 +11,7 @@ import {
 } from './quiz.schemas';
 import { aiExplanationsEnabled, explainQuestion } from './quiz-ai.service';
 import { getDiagnosis } from './quiz-diagnosis.service';
+import { getRewards, getWeeklyLeaderboard } from './quiz-rewards.service';
 import {
   getAttempt,
   getCatalog,
@@ -142,6 +143,24 @@ quizRoutes.get(
   asyncHandler(async (req, res) => {
     const query = progressQuerySchema.parse(req.query);
     res.json(await getProgress(req.user!, query));
+  }),
+);
+
+// XP, level and streak for the caller (or one of a family's children).
+quizRoutes.get(
+  '/rewards',
+  asyncHandler(async (req, res) => {
+    const query = progressQuerySchema.parse(req.query);
+    res.json(await getRewards(req.user!, query));
+  }),
+);
+
+// This week's top learners by XP, plus the caller's own rank.
+quizRoutes.get(
+  '/leaderboard',
+  asyncHandler(async (req, res) => {
+    const query = progressQuerySchema.parse(req.query);
+    res.json(await getWeeklyLeaderboard(req.user!, query));
   }),
 );
 
