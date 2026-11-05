@@ -114,6 +114,8 @@ export const listQuestionsQuerySchema = z.object({
   topicId: z.string().trim().min(1).optional(),
   examId: z.string().trim().min(1).optional(),
   status: z.nativeEnum(QuestionStatus).optional(),
+  // Case-insensitive match on the question text.
+  search: z.string().trim().min(2).max(200).optional(),
   cursor: z.string().trim().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });

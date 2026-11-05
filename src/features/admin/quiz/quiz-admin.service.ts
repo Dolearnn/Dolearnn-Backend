@@ -306,6 +306,7 @@ export async function listQuestions(query: ListQuestionsQuery) {
       ...(query.topicId ? { topicId: query.topicId } : {}),
       ...(query.examId ? { examId: query.examId } : {}),
       ...(query.status ? { status: query.status } : {}),
+      ...(query.search ? { text: { contains: query.search, mode: 'insensitive' as const } } : {}),
     },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: query.limit + 1,
