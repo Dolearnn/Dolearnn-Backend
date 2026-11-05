@@ -14,6 +14,39 @@ const crypto = require('crypto');
 const { PrismaClient, QuestionStatus } = require('@prisma/client');
 const { exam, subjects } = require('./data/jamb');
 
+// Extra question banks live in scripts/data/jamb-extra/<subject-slug>.js and
+// export an array of rows in the same shape as `questions` in data/jamb.js.
+const fs = require('fs');
+const path = require('path');
+const extraDir = path.join(__dirname, 'data', 'jamb-extra');
+// The extra rows are shuffled with a seed taken from the question text, so the
+// correct answer is spread across A-D but every re-run gives the same order.
+function shuffleRow([topicSlug, text, options, correctIndex, explanation]) {
+  let seed = crypto.createHash('sha1').update(text).digest().readUInt32BE(0);
+  const random = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 2 ** 32;
+  };
+  const order = options.map((_, i) => i);
+  for (let i = order.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  return [topicSlug, text, order.map((i) => options[i]), order.indexOf(correctIndex), explanation];
+}
+
+for (const subject of subjects) {
+  const file = path.join(extraDir, `${subject.slug}.js`);
+  if (fs.existsSync(file)) {
+    subject.questions = subject.questions.concat(require(file).map(shuffleRow));
+  }
+  const seen = new Set();
+  for (const [, text] of subject.questions) {
+    if (seen.has(text)) throw new Error(`Duplicate question in ${subject.slug}: ${text}`);
+    seen.add(text);
+  }
+}
+
 const prisma = new PrismaClient();
 const OPTION_IDS = ['A', 'B', 'C', 'D'];
 
