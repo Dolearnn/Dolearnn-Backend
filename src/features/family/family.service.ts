@@ -844,6 +844,7 @@ export async function acceptSessionProposal(
       proposal.teacherId,
       proposal.startsAt,
       proposal.durationMins,
+      proposal.id,
     );
     await assertStudentHasNoSchedulingConflict(
       tx,

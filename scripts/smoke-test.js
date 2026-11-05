@@ -98,6 +98,7 @@ async function main() {
     body: JSON.stringify({
       firstName: 'Smoke',
       lastName: 'Teacher',
+      gender: 'FEMALE',
       email: teacherEmail,
       phoneCountry: '+234',
       phoneNumber: '8000000000',
