@@ -19,21 +19,8 @@ const { exam, subjects } = require('./data/jamb');
 const fs = require('fs');
 const path = require('path');
 const extraDir = path.join(__dirname, 'data', 'jamb-extra');
-// The extra rows are shuffled with a seed taken from the question text, so the
-// correct answer is spread across A-D but every re-run gives the same order.
-function shuffleRow([topicSlug, text, options, correctIndex, explanation]) {
-  let seed = crypto.createHash('sha1').update(text).digest().readUInt32BE(0);
-  const random = () => {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    return seed / 2 ** 32;
-  };
-  const order = options.map((_, i) => i);
-  for (let i = order.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(random() * (i + 1));
-    [order[i], order[j]] = [order[j], order[i]];
-  }
-  return [topicSlug, text, order.map((i) => options[i]), order.indexOf(correctIndex), explanation];
-}
+// The extra rows are shuffled in a stable order (see lib/question-rows.js).
+const { shuffleRow } = require('./lib/question-rows');
 
 for (const subject of subjects) {
   const file = path.join(extraDir, `${subject.slug}.js`);
