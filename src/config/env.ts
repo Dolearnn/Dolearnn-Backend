@@ -1,12 +1,17 @@
 import 'dotenv/config';
 import { z } from 'zod';
 
+const optionalNonEmptyString = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z.string().min(1).optional(),
+);
+
 const envSchema = z.object({
   PORT: z.coerce.number().default(4000),
   NODE_ENV: z
     .enum(['development', 'test', 'production'])
     .default('development'),
-  DATABASE_URL: z.string().min(1).optional(),
+  DATABASE_URL: optionalNonEmptyString,
   FRONTEND_URL: z.string().url().default('http://localhost:3000'),
   FRONTEND_URLS: z.string().optional(),
   JWT_SECRET: z.string().min(24).optional(),
@@ -16,14 +21,14 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .optional()
     .transform((value) => value === 'true'),
-  GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+  GOOGLE_CLIENT_ID: optionalNonEmptyString,
   EMAIL_PROVIDER: z.enum(['resend', 'sendgrid']).optional(),
   EMAIL_FROM_EMAIL: z.string().email().optional(),
-  EMAIL_FROM_NAME: z.string().min(1).optional(),
-  RESEND_API_KEY: z.string().min(1).optional(),
-  SENDGRID_API_KEY: z.string().min(1).optional(),
+  EMAIL_FROM_NAME: optionalNonEmptyString,
+  RESEND_API_KEY: optionalNonEmptyString,
+  SENDGRID_API_KEY: optionalNonEmptyString,
   // AI features stay switched off until a key is set.
-  ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  ANTHROPIC_API_KEY: optionalNonEmptyString,
   // Which Claude model writes explanations. Explanations are generated once per
   // question and reused, so the strongest model stays cheap; pick a smaller one
   // (for example claude-sonnet-5) here if that ever changes.

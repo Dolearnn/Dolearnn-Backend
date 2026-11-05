@@ -74,6 +74,7 @@ async function findTeacherProposalConflict(
   teacherId: string,
   startsAt: Date,
   durationMins: number,
+  excludeProposalId?: string,
 ) {
   const windowStart = subtractMinutes(startsAt, durationMins);
   const windowEnd = addMinutes(startsAt, durationMins);
@@ -82,6 +83,7 @@ async function findTeacherProposalConflict(
     where: {
       teacherId,
       status: ProposalStatus.PENDING,
+      ...(excludeProposalId ? { id: { not: excludeProposalId } } : {}),
       startsAt: {
         gt: windowStart,
         lt: windowEnd,
@@ -161,6 +163,7 @@ export async function assertTeacherHasNoSchedulingConflict(
   teacherId: string,
   startsAt: Date,
   durationMins: number,
+  excludeProposalId?: string,
 ) {
   const sessionConflict = await findTeacherSessionConflict(
     db,
@@ -181,6 +184,7 @@ export async function assertTeacherHasNoSchedulingConflict(
     teacherId,
     startsAt,
     durationMins,
+    excludeProposalId,
   );
 
   if (proposalConflict) {

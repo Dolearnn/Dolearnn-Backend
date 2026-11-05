@@ -98,6 +98,7 @@ async function main() {
     body: JSON.stringify({
       firstName: 'Smoke',
       lastName: 'Teacher',
+      gender: 'FEMALE',
       email: teacherEmail,
       phoneCountry: '+234',
       phoneNumber: '8000000000',
@@ -118,6 +119,7 @@ async function main() {
       email: familyEmail,
       password: 'SmokeFamily123#',
       whatsapp: '+234 800 000 0000',
+      accountType: 'PARENT',
     }),
     label: 'family register',
   });

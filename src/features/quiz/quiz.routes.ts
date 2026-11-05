@@ -15,6 +15,7 @@ import {
   getAttempt,
   getCatalog,
   getNextActions,
+  getPracticeOverview,
   getProgress,
   getWeakTopics,
   listAttempts,
@@ -125,6 +126,14 @@ quizRoutes.post(
   asyncHandler(async (req, res) => {
     const attemptId = getRouteParam(req.params.attemptId, 'attempt id');
     res.json(await getDiagnosis(req.user!.id, attemptId));
+  }),
+);
+
+quizRoutes.get(
+  '/overview',
+  asyncHandler(async (req, res) => {
+    const query = progressQuerySchema.parse(req.query);
+    res.json(await getPracticeOverview(req.user!, query));
   }),
 );
 
