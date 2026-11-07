@@ -24,4 +24,4 @@ jobs:
           curl --silent --show-error --fail --max-time 90 \
             --output /dev/null \
             --write-out "health %{http_code} in %{time_total}s\n" \
-            https://dolearnn-backend.onrender.com/api/health
+            https://dolearnn-backend-oi4r.onrender.com/api/health
