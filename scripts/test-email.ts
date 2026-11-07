@@ -17,9 +17,9 @@ async function main() {
   console.log(describeEmailConfig());
   const id = await sendEmail({
     to,
-    subject: 'DoLearn test email',
-    text: 'This is a test email from the DoLearn backend. If you can read it, email delivery works.',
-    html: '<p>This is a test email from the DoLearn backend.</p><p>If you can read it, email delivery works.</p>',
+    subject: 'DoLearnn test email',
+    text: 'This is a test email from the DoLearnn backend. If you can read it, email delivery works.',
+    html: '<p>This is a test email from the DoLearnn backend.</p><p>If you can read it, email delivery works.</p>',
   });
 
   if (id === undefined) {

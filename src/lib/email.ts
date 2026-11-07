@@ -12,12 +12,13 @@ type EmailMessage = {
 
 let warnedMissingEmailConfig = false;
 
+// The sender name people see in their inbox. EMAIL_FROM_NAME can override it.
+const DEFAULT_SENDER_NAME = 'DoLearnn';
+
 function fromAddress() {
   if (!env.EMAIL_FROM_EMAIL) return null;
 
-  return env.EMAIL_FROM_NAME
-    ? `${env.EMAIL_FROM_NAME} <${env.EMAIL_FROM_EMAIL}>`
-    : env.EMAIL_FROM_EMAIL;
+  return `${env.EMAIL_FROM_NAME || DEFAULT_SENDER_NAME} <${env.EMAIL_FROM_EMAIL}>`;
 }
 
 function emailProviderConfigError() {

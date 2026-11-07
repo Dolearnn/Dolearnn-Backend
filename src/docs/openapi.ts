@@ -12,10 +12,10 @@ export const openApiSpec = swaggerJSDoc({
   definition: {
     openapi: '3.0.3',
     info: {
-      title: 'DoLearn Backend API',
+      title: 'DoLearnn Backend API',
       version: '0.1.0',
       description:
-        'API documentation for the DoLearn tutoring platform backend.',
+        'API documentation for the DoLearnn tutoring platform backend.',
     },
     servers: [
       {

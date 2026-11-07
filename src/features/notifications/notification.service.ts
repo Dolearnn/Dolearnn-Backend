@@ -47,7 +47,7 @@ function notificationEmailMessage(
 
   return {
     to: user.email,
-    subject: `DoLearn: ${input.title}`,
+    subject: `DoLearnn: ${input.title}`,
     text: `Hello ${user.name},\n\n${input.body}\n\nOpen your dashboard: ${url}`,
     html: `<p>Hello ${safeName},</p><p><strong>${safeTitle}</strong></p><p>${safeBody}</p><p><a href="${url}">Open your dashboard</a></p>`,
   };
@@ -169,7 +169,7 @@ export async function createAdminNotifications(
   void sendBulkEmail(
     admins.map((admin) => ({
       to: admin.email,
-      subject: `DoLearn admin alert: ${input.title}`,
+      subject: `DoLearnn admin alert: ${input.title}`,
       text: `Hello ${admin.name},\n\n${input.body}\n\nSign in to the admin dashboard for more details.`,
       // Keep the body's line breaks so multi-line details stay readable.
       html: `<p>Hello ${escapeHtml(admin.name)},</p><p>${escapeHtml(input.body).replace(/\n/g, '<br>')}</p><p>Sign in to the admin dashboard for more details.</p>`,

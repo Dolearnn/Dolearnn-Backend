@@ -7,7 +7,7 @@ import { createAdminNotifications, createNotification } from '../notifications/n
  * A lesson counts once both the tutor and the learner confirm it. Learners
  * often forget to confirm, which would leave tutors unpaid, so: once the tutor
  * has confirmed and 24 hours have passed since the lesson ended without the
- * learner responding (and no cancellation request is open), DoLearn confirms
+ * learner responding (and no cancellation request is open), DoLearnn confirms
  * it for the learner.
  */
 export const AUTO_CONFIRM_AFTER_HOURS = 24;
@@ -71,7 +71,7 @@ export async function autoConfirmOverdueAttendance(now = new Date()) {
           action: AuditAction.FAMILY_ATTENDANCE_CONFIRMED,
           entityType: AuditEntityType.ATTENDANCE,
           entityId: session.attendance!.id,
-          summary: `DoLearn confirmed ${session.subject} with ${session.student.fullName} automatically: the learner did not respond within ${AUTO_CONFIRM_AFTER_HOURS} hours.`,
+          summary: `DoLearnn confirmed ${session.subject} with ${session.student.fullName} automatically: the learner did not respond within ${AUTO_CONFIRM_AFTER_HOURS} hours.`,
           studentId: session.studentId,
           teacherId: session.teacher.id,
           metadata: { sessionId: session.id, automatic: true },

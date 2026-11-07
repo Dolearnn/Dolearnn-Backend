@@ -15,7 +15,7 @@ void prisma
   .catch((error) => console.error('Initial database connection failed', error));
 
 const server = app.listen(env.PORT, () => {
-  console.log(`DoLearn API listening on http://localhost:${env.PORT}`);
+  console.log(`DoLearnn API listening on http://localhost:${env.PORT}`);
   console.log(describeEmailConfig());
   startAttendanceAutoConfirm();
 });
@@ -32,7 +32,7 @@ server.on('error', (error: NodeJS.ErrnoException) => {
 });
 
 function shutdown(signal: string) {
-  console.log(`${signal} received. Shutting down DoLearn API...`);
+  console.log(`${signal} received. Shutting down DoLearnn API...`);
   server.close(() => {
     void prisma.$disconnect().finally(() => process.exit(0));
   });

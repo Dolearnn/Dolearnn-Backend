@@ -17,7 +17,7 @@ export function setupSwagger(app: Express) {
     swaggerUi.serve,
     swaggerUi.setup(openApiSpec, {
       explorer: true,
-      customSiteTitle: 'DoLearn API Docs',
+      customSiteTitle: 'DoLearnn API Docs',
     }),
   );
 }

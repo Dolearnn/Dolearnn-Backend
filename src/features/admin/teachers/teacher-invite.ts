@@ -26,11 +26,11 @@ export async function sendTutorInvite(user: Pick<User, 'id' | 'email' | 'name' |
 
   const id = await sendEmail({
     to: user.email,
-    subject: "You're invited to tutor on DoLearn",
+    subject: "You're invited to tutor on DoLearnn",
     text: [
       `Hello ${firstName},`,
       '',
-      'You have been added as a tutor on DoLearn.',
+      'You have been added as a tutor on DoLearnn.',
       `Set your password here (the link works once and expires in ${TUTOR_INVITE_VALID_DAYS} days):`,
       link,
       '',
@@ -39,7 +39,7 @@ export async function sendTutorInvite(user: Pick<User, 'id' | 'email' | 'name' |
     ].join('\n'),
     html: [
       `<p>Hello ${escapeHtml(firstName)},</p>`,
-      '<p>You have been added as a tutor on DoLearn.</p>',
+      '<p>You have been added as a tutor on DoLearnn.</p>',
       `<p><a href="${link}">Set your password</a><br>This link works once and expires in ${TUTOR_INVITE_VALID_DAYS} days.</p>`,
       `<p>After that, sign in at <a href="${loginUrl}">${escapeHtml(loginUrl)}</a> with ${escapeHtml(user.email)}.</p>`,
       '<p>Then add your payout account on your profile. Your students and their learning summaries appear under Students once you are matched.</p>',
