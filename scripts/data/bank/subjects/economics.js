@@ -1,0 +1,33 @@
+// Original WAEC/NECO/JAMB-style Economics questions. Correct answer first; options are shuffled on import.
+module.exports = {
+  slug: 'economics',
+  name: 'Economics',
+  sortOrder: 10,
+  exams: ['waec', 'neco', 'jamb', 'post-utme'],
+  topics: [
+    { slug: 'basic-concepts', name: 'Basic Concepts' },
+    { slug: 'demand-supply', name: 'Demand, Supply and Price' },
+    { slug: 'production', name: 'Production and Costs' },
+    { slug: 'market-structures', name: 'Market Structures' },
+    { slug: 'money-banking', name: 'Money and Banking' },
+    { slug: 'public-finance', name: 'Public Finance' },
+    { slug: 'international-trade', name: 'International Trade' },
+    { slug: 'development', name: 'National Income and Development' },
+  ],
+  questions: [
+    ['basic-concepts', 'The real cost of a choice, measured by the next best alternative forgone, is called', ['opportunity cost', 'money cost', 'fixed cost', 'marginal cost'], 0, 'Opportunity cost is the value of the next best alternative given up when a choice is made.'],
+    ['basic-concepts', 'Which of the following is a free good?', ['Air in the atmosphere', 'Pipe-borne water', 'Electricity', 'Petrol'], 0, 'Air is not scarce and commands no price, so it is a free good.'],
+    ['demand-supply', 'A rise in the price of tea leads to an increase in the demand for coffee. Tea and coffee are', ['substitutes', 'complements', 'inferior goods', 'Giffen goods'], 0, 'When the price of one good rises and demand for the other rises, the goods are substitutes.'],
+    ['demand-supply', 'If the price elasticity of demand for a good is 0.4, demand for the good is', ['price inelastic', 'price elastic', 'unitary elastic', 'perfectly elastic'], 0, 'A coefficient below 1 means quantity demanded changes proportionately less than price: inelastic.'],
+    ['demand-supply', 'When the government fixes a maximum price below the equilibrium price, the likely result is', ['a shortage of the good', 'a surplus of the good', 'a fall in demand', 'an increase in supply'], 0, 'Below equilibrium, quantity demanded exceeds quantity supplied, so there is a shortage.'],
+    ['production', 'The law of diminishing returns applies when', ['more of a variable factor is added to a fixed factor', 'all factors of production are increased together', 'the firm produces nothing', 'prices are fixed by government'], 0, 'Diminishing returns set in when extra units of a variable input are combined with a fixed input (short run).'],
+    ['production', 'The reward for entrepreneurship is', ['profit', 'rent', 'wages', 'interest'], 0, 'Land earns rent, labour earns wages, capital earns interest and the entrepreneur earns profit.'],
+    ['market-structures', 'A market with a single seller of a product that has no close substitutes is', ['monopoly', 'oligopoly', 'perfect competition', 'monopolistic competition'], 0, 'A monopoly has one seller and no close substitutes.'],
+    ['money-banking', 'The Central Bank of Nigeria can reduce the money supply by', ['selling government securities in the open market', 'lowering the cash reserve ratio', 'reducing the monetary policy rate', 'buying treasury bills from banks'], 0, 'Selling securities (open market operations) takes money out of circulation.'],
+    ['money-banking', 'Which function of money allows the values of different goods to be compared?', ['Unit of account', 'Store of value', 'Standard of deferred payment', 'Medium of exchange'], 0, 'As a unit of account, money expresses the value of goods in one common measure.'],
+    ['public-finance', 'A tax whose rate rises as income rises is', ['a progressive tax', 'a regressive tax', 'a proportional tax', 'an indirect tax'], 0, 'A progressive tax takes a higher percentage from higher incomes.'],
+    ['international-trade', 'A country should specialise in goods it can produce at the lowest opportunity cost. This is the principle of', ['comparative advantage', 'absolute advantage', 'balance of trade', 'terms of trade'], 0, 'Comparative advantage is based on lower opportunity cost, not just lower absolute cost.'],
+    ['international-trade', "A country's balance of trade is the difference between its", ['visible exports and visible imports', 'exports and imports of services', 'capital inflows and outflows', 'foreign reserves and external debt'], 0, 'Balance of trade = value of visible (goods) exports − value of visible imports.'],
+    ['development', 'Gross domestic product divided by the total population gives', ['per capita income', 'national income', 'net national product', 'disposable income'], 0, 'Per capita income is total output (or income) per person.'],
+  ],
+};

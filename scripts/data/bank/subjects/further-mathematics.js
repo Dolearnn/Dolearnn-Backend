@@ -1,0 +1,30 @@
+// Original WAEC/NECO/JAMB-style Further Mathematics questions. Correct answer first; options are shuffled on import.
+module.exports = {
+  slug: 'further-mathematics',
+  name: 'Further Mathematics',
+  sortOrder: 19,
+  exams: ['waec', 'neco', 'jamb', 'post-utme'],
+  topics: [
+    { slug: 'sets-functions', name: 'Sets and Functions' },
+    { slug: 'matrices', name: 'Matrices and Determinants' },
+    { slug: 'sequences-binomial', name: 'Sequences and the Binomial Theorem' },
+    { slug: 'calculus', name: 'Calculus' },
+    { slug: 'vectors', name: 'Vectors' },
+    { slug: 'permutation-statistics', name: 'Permutation, Combination and Statistics' },
+  ],
+  questions: [
+    ['matrices', 'Evaluate the determinant of the matrix [[3, 2], [1, 4]].', ['10', '14', '12', '5'], 0, '3 × 4 − 2 × 1 = 12 − 2 = 10.'],
+    ['sets-functions', 'If f(x) = 2x + 1 and g(x) = x², find f(g(3)).', ['19', '49', '13', '18'], 0, 'g(3) = 9, then f(9) = 2(9) + 1 = 19.'],
+    ['sets-functions', 'Find the inverse of f(x) = (x − 3)/2.', ['f⁻¹(x) = 2x + 3', 'f⁻¹(x) = 2x − 3', 'f⁻¹(x) = (x + 3)/2', 'f⁻¹(x) = 3x − 2'], 0, 'Let y = (x − 3)/2, so x = 2y + 3. Hence f⁻¹(x) = 2x + 3.'],
+    ['sets-functions', 'If n(A) = 7, n(B) = 5 and n(A ∩ B) = 3, find n(A ∪ B).', ['9', '12', '15', '6'], 0, 'n(A ∪ B) = 7 + 5 − 3 = 9.'],
+    ['sequences-binomial', 'Find the coefficient of x² in the expansion of (1 + 2x)⁵.', ['40', '10', '80', '20'], 0, '⁵C₂ × 2² = 10 × 4 = 40.'],
+    ['sequences-binomial', 'Find the sum to infinity of the series 8 + 4 + 2 + 1 + …', ['16', '15', '32', '12'], 0, 'a = 8, r = 1/2, so S∞ = 8 ÷ (1 − 1/2) = 16.'],
+    ['sequences-binomial', 'The nth term of an arithmetic progression is 3n + 2. Find the sum of the first 10 terms.', ['185', '175', '320', '32'], 0, 'First term 5, tenth term 32, so S₁₀ = 10(5 + 32)/2 = 185.'],
+    ['calculus', 'Differentiate y = 3x⁴ − 2x with respect to x.', ['12x³ − 2', '12x³', '3x³ − 2', '12x⁴ − 2'], 0, 'd/dx(3x⁴) = 12x³ and d/dx(−2x) = −2.'],
+    ['calculus', 'Evaluate the integral of 3x² from x = 0 to x = 2.', ['8', '12', '6', '4'], 0, 'The integral of 3x² is x³; 2³ − 0³ = 8.'],
+    ['calculus', 'Find the gradient of the curve y = x² − 4x + 1 at x = 3.', ['2', '−2', '4', '6'], 0, 'dy/dx = 2x − 4 = 2(3) − 4 = 2.'],
+    ['vectors', 'Find the magnitude of the vector 3i − 4j.', ['5', '7', '1', '25'], 0, '√(3² + 4²) = √25 = 5.'],
+    ['vectors', 'Find the dot product of a = 2i + 3j and b = 4i − j.', ['5', '11', '8', '−5'], 0, '(2)(4) + (3)(−1) = 8 − 3 = 5.'],
+    ['permutation-statistics', 'In how many ways can 3 books be chosen and arranged on a shelf from 5 different books?', ['60', '10', '120', '15'], 0, '⁵P₃ = 5 × 4 × 3 = 60.'],
+  ],
+};

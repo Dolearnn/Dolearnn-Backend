@@ -11,6 +11,7 @@
     "check-db": "node scripts/check-db.js",
     "smoke": "node scripts/smoke-test.js",
     "seed": "node scripts/seed.js",
+    "seed:bank": "node scripts/seed-bank.js",
     "reset-data": "node scripts/reset-data.js",
     "add-indexes": "node scripts/add-indexes.js",
     "prisma:generate": "prisma generate",

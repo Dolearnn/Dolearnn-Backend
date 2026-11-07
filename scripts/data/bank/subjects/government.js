@@ -1,0 +1,31 @@
+// Original WAEC/NECO/JAMB-style Government questions. Correct answer first; options are shuffled on import.
+module.exports = {
+  slug: 'government',
+  name: 'Government',
+  sortOrder: 11,
+  exams: ['waec', 'neco', 'jamb', 'post-utme'],
+  topics: [
+    { slug: 'basic-concepts', name: 'Basic Concepts of Government' },
+    { slug: 'constitution', name: 'Constitutions and Systems of Government' },
+    { slug: 'arms-of-government', name: 'Arms of Government' },
+    { slug: 'electoral-process', name: 'Elections and Political Parties' },
+    { slug: 'nigerian-history', name: 'Nigerian Constitutional History' },
+    { slug: 'international-organisations', name: 'International Organisations' },
+  ],
+  questions: [
+    ['basic-concepts', 'The capacity to make others obey commands, if necessary by sanctions, is', ['power', 'authority', 'legitimacy', 'influence'], 0, 'Power is the ability to compel obedience; authority is the recognised right to use power.'],
+    ['basic-concepts', 'The principle that no one is above the law is', ['the rule of law', 'separation of powers', 'federalism', 'delegated legislation'], 0, 'Under the rule of law (A. V. Dicey), everyone, including rulers, is subject to the law.'],
+    ['basic-concepts', 'A state in which power is shared between a central government and component units, each supreme in its own sphere, is', ['a federal state', 'a unitary state', 'a confederal state', 'an absolute monarchy'], 0, 'Federalism divides powers constitutionally between the centre and the units.'],
+    ['constitution', 'A rigid constitution is one that', ['requires a special procedure to amend', 'is always unwritten', 'can be amended by a simple majority', 'has no supremacy over ordinary laws'], 0, 'Rigid constitutions need a special, more difficult amendment procedure.'],
+    ['arms-of-government', 'The arm of government that interprets laws is the', ['judiciary', 'legislature', 'executive', 'civil service'], 0, 'The legislature makes laws, the executive carries them out and the judiciary interprets them.'],
+    ['arms-of-government', 'The doctrine of separation of powers is associated with', ['Baron de Montesquieu', 'A. V. Dicey', 'Karl Marx', 'Thomas Hobbes'], 0, 'Montesquieu developed the doctrine in "The Spirit of the Laws" (1748).'],
+    ['arms-of-government', 'In a parliamentary system, the head of government is the', ['Prime Minister', 'ceremonial head of state', 'Speaker of parliament', 'Chief Justice'], 0, 'The Prime Minister heads the government; the head of state is ceremonial.'],
+    ['electoral-process', 'An election in which voters choose representatives who then elect the officials is', ['an indirect election', 'a direct election', 'a referendum', 'a recall'], 0, 'In an indirect election, an intermediate body (electoral college) chooses the officials.'],
+    ['electoral-process', 'The body that conducts general elections in Nigeria is', ['INEC', 'NECO', 'NOA', 'NPC'], 0, 'The Independent National Electoral Commission (INEC) conducts federal and state elections.'],
+    ['nigerian-history', 'The Northern and Southern Protectorates of Nigeria were amalgamated in', ['1914', '1900', '1922', '1960'], 0, 'Lord Lugard amalgamated the two protectorates in 1914.'],
+    ['nigerian-history', 'Nigeria became a republic in', ['1963', '1960', '1966', '1979'], 0, 'Nigeria gained independence in 1960 and became a republic on 1 October 1963.'],
+    ['nigerian-history', 'The constitution that first introduced the elective principle in Nigeria was the', ['Clifford Constitution of 1922', 'Richards Constitution of 1946', 'Macpherson Constitution of 1951', 'Lyttleton Constitution of 1954'], 0, 'The 1922 Clifford Constitution allowed elected members from Lagos and Calabar.'],
+    ['international-organisations', 'The headquarters of the ECOWAS Commission is in', ['Abuja', 'Accra', 'Lomé', 'Dakar'], 0, 'The ECOWAS Commission is based in Abuja, Nigeria.'],
+    ['international-organisations', 'The Organisation of African Unity was replaced by the African Union in', ['2002', '1963', '1999', '2010'], 0, 'The OAU (founded 1963) was replaced by the African Union, launched in 2002.'],
+  ],
+};
