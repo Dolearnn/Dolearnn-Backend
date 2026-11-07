@@ -1,4 +1,5 @@
 import compression from 'compression';
+import { requestTiming } from './middleware/request-timing';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
@@ -39,6 +40,7 @@ export function createApp() {
   const app = express();
   const origins = allowedOrigins();
 
+  app.use(requestTiming);
   app.use(helmet());
   app.use(compression());
 
