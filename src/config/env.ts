@@ -6,6 +6,19 @@ const optionalNonEmptyString = z.preprocess(
   z.string().min(1).optional(),
 );
 
+// The sender address. Accepts "you@x.com" or "Name <you@x.com>" (quotes and
+// spaces are ignored). A value that still isn't an email turns email off with a
+// warning instead of stopping the whole server.
+const senderEmail = z.preprocess((value) => {
+  if (typeof value !== 'string') return undefined;
+  const cleaned = value.trim().replace(/^["']|["']$/g, '');
+  if (!cleaned) return undefined;
+  const address = (cleaned.match(/<([^>]+)>/)?.[1] ?? cleaned).trim();
+  if (z.string().email().safeParse(address).success) return address;
+  console.warn('EMAIL_FROM_EMAIL is not a valid email address, so email is turned off. Set it to an address like you@example.com.');
+  return undefined;
+}, z.string().email().optional());
+
 const envSchema = z.object({
   PORT: z.coerce.number().default(4000),
   NODE_ENV: z
@@ -23,7 +36,7 @@ const envSchema = z.object({
     .transform((value) => value === 'true'),
   GOOGLE_CLIENT_ID: optionalNonEmptyString,
   EMAIL_PROVIDER: z.enum(['resend', 'sendgrid', 'smtp']).optional(),
-  EMAIL_FROM_EMAIL: z.string().email().optional(),
+  EMAIL_FROM_EMAIL: senderEmail,
   EMAIL_FROM_NAME: optionalNonEmptyString,
   RESEND_API_KEY: optionalNonEmptyString,
   SENDGRID_API_KEY: optionalNonEmptyString,
