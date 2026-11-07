@@ -1,5 +1,6 @@
 import { createApp } from './app';
 import { env } from './config/env';
+import { startAttendanceAutoConfirm } from './features/sessions/attendance-auto-confirm';
 import { describeEmailConfig } from './lib/email';
 import { prisma } from './lib/prisma';
 
@@ -16,6 +17,7 @@ void prisma
 const server = app.listen(env.PORT, () => {
   console.log(`DoLearn API listening on http://localhost:${env.PORT}`);
   console.log(describeEmailConfig());
+  startAttendanceAutoConfirm();
 });
 
 server.on('error', (error: NodeJS.ErrnoException) => {

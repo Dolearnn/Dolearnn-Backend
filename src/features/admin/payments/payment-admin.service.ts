@@ -372,6 +372,8 @@ export async function listPayoutSummaries(month = currentMonth()) {
           teacherConfirmedAt: { not: null },
           familyConfirmedAt: { not: null },
         },
+        // A session is paid only once the tutor has written its note.
+        note: { isNot: null },
       },
       include: {
         attendance: true,
