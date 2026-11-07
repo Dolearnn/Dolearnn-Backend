@@ -4,6 +4,7 @@ import { env } from '../../config/env';
 import { AppError } from '../../lib/http';
 import { prisma } from '../../lib/prisma';
 import { aiExplanationsEnabled } from './quiz-ai.service';
+import { attemptSubjects, sameSubjectsWhere, subjectLabel } from './quiz.service';
 import {
   DIAGNOSIS_SYSTEM_PROMPT,
   buildDiagnosisPrompt,
@@ -47,12 +48,13 @@ async function loadFacts(userId: string, attemptId: string): Promise<DiagnosisFa
       status: true,
       studentId: true,
       subjectId: true,
+      subjectIds: true,
       submittedAt: true,
       scorePercent: true,
       correctCount: true,
       totalQuestions: true,
       topicBreakdown: true,
-      subject: { select: { name: true } },
+      subject: { select: { id: true, name: true } },
     },
   });
 
@@ -69,7 +71,7 @@ async function loadFacts(userId: string, attemptId: string): Promise<DiagnosisFa
       where: {
         userId,
         studentId: attempt.studentId,
-        subjectId: attempt.subjectId,
+        ...sameSubjectsWhere(attempt),
         status: QuizAttemptStatus.SUBMITTED,
         scorePercent: { not: null },
         submittedAt: { lt: attempt.submittedAt },
@@ -86,7 +88,7 @@ async function loadFacts(userId: string, attemptId: string): Promise<DiagnosisFa
   const overall = new Map(stats.map((stat) => [stat.topicId, stat]));
 
   return {
-    subjectName: attempt.subject.name,
+    subjectName: subjectLabel(await attemptSubjects(attempt)),
     scorePercent: attempt.scorePercent ?? 0,
     correctCount: attempt.correctCount ?? 0,
     totalQuestions: attempt.totalQuestions,

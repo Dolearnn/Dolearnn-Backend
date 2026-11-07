@@ -93,6 +93,7 @@ export async function getAchievements(user: RewardsUser, query: { studentId?: st
         submittedAt: true,
         scorePercent: true,
         subjectId: true,
+        subjectIds: true,
         topicBreakdown: true,
         retakeOf: { select: { scorePercent: true } },
         arenaEntry: { select: { id: true } },
@@ -126,7 +127,9 @@ export async function getAchievements(user: RewardsUser, query: { studentId?: st
       attempt.scorePercent != null &&
       attempt.scorePercent - attempt.retakeOf.scorePercent >= IMPROVEMENT_POINTS,
   ).length;
-  const subjects = new Set(attempts.map((attempt) => attempt.subjectId)).size;
+  const subjects = new Set(
+    attempts.flatMap((attempt) => [attempt.subjectId, ...attempt.subjectIds]),
+  ).size;
   const battles = attempts.filter((attempt) => attempt.arenaEntry).length;
   const bestStreak = streaksFor(days, today).best;
 

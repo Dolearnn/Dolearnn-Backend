@@ -13,12 +13,13 @@ import {
   getQuestionPool,
   type PoolQuestion,
 } from './quiz.cache';
-import type {
-  ListAttemptsQuery,
-  ProgressQuery,
-  StartAttemptInput,
-  SubmitAttemptInput,
-  WeakTopicsQuery,
+import {
+  subjectList,
+  type ListAttemptsQuery,
+  type ProgressQuery,
+  type StartAttemptInput,
+  type SubmitAttemptInput,
+  type WeakTopicsQuery,
 } from './quiz.schemas';
 
 type QuizUser = { id: string; role: Role };
@@ -27,6 +28,8 @@ type QuestionOption = { id: string; text: string };
 
 type TopicBreakdown = {
   topicId: string;
+  // Stored since mixed-subject exams; older attempts are looked up in the catalog.
+  subjectId?: string;
   name: string;
   attempted: number;
   correct: number;
@@ -155,12 +158,46 @@ export type AttemptRow = Prisma.QuizAttemptGetPayload<{
   include: { subject: { select: { id: true; name: true } } };
 }>;
 
-export function attemptSummary(attempt: AttemptRow) {
+export type AttemptSubject = { id: string; name: string };
+
+/** The subjects an attempt covers, in order. One entry unless it is a mixed exam. */
+export async function attemptSubjects(attempt: {
+  subject: AttemptSubject;
+  subjectIds: string[];
+}): Promise<AttemptSubject[]> {
+  if (attempt.subjectIds.length <= 1) return [attempt.subject];
+  const index = await getCatalogIndex();
+  return attempt.subjectIds.map((id) => ({
+    id,
+    name: index.subjectsById.get(id)?.name ?? 'Subject',
+  }));
+}
+
+/** "Mathematics", or "English + Physics + Chemistry" for a mixed exam. */
+export function subjectLabel(subjects: AttemptSubject[]) {
+  return subjects.map((subject) => subject.name).join(' + ');
+}
+
+/** Earlier attempts comparable with this one: same subject, or the same mix of subjects. */
+export function sameSubjectsWhere(attempt: { subjectId: string; subjectIds: string[] }) {
+  return attempt.subjectIds.length > 1
+    ? { subjectIds: { equals: attempt.subjectIds } }
+    : { subjectId: attempt.subjectId, subjectIds: { isEmpty: true } };
+}
+
+function topicSubjectId(topic: TopicBreakdown, subjectIdByTopicId: Map<string, string>) {
+  return topic.subjectId ?? subjectIdByTopicId.get(topic.topicId) ?? null;
+}
+
+export function attemptSummary(attempt: AttemptRow, subjects: AttemptSubject[] = [attempt.subject]) {
+  const mixed = subjects.length > 1;
   return {
     id: attempt.id,
     mode: attempt.mode,
     status: attempt.status,
-    subject: attempt.subject,
+    // For a mixed exam the name lists every subject, so headings read naturally.
+    subject: mixed ? { id: attempt.subject.id, name: subjectLabel(subjects) } : attempt.subject,
+    subjects,
     examId: attempt.examId,
     studentId: attempt.studentId,
     totalQuestions: attempt.totalQuestions,
@@ -176,11 +213,13 @@ function tutoringSuggestion(
   attempt: Pick<AttemptRow, 'subject' | 'studentId'>,
   breakdown: TopicBreakdown[],
   scorePercent: number,
+  subjects: AttemptSubject[],
 ) {
   const weakTopics = breakdown
     .filter((topic) => topic.attempted >= 2)
     .map((topic) => ({
       topicId: topic.topicId,
+      subjectId: topic.subjectId ?? attempt.subject.id,
       name: topic.name,
       accuracyPercent: percent(topic.correct, topic.attempted),
     }))
@@ -192,13 +231,22 @@ function tutoringSuggestion(
     return null;
   }
 
+  // A tutor request is for one subject: in a mixed exam, the one with the weakest topic.
+  const focusSubject =
+    subjects.find((subject) => subject.id === weakTopics[0].subjectId) ?? attempt.subject;
+  const focusTopics = weakTopics.filter((topic) => topic.subjectId === focusSubject.id);
+
   // Shaped like the intake form so the UI can pre-fill a tutoring request.
   return {
-    weakTopics,
+    weakTopics: weakTopics.map((topic) => ({
+      topicId: topic.topicId,
+      name: topic.name,
+      accuracyPercent: topic.accuracyPercent,
+    })),
     prefill: {
       studentId: attempt.studentId,
-      subject: attempt.subject.name,
-      specificTopics: weakTopics.map((topic) => topic.name).join(', '),
+      subject: focusSubject.name,
+      specificTopics: (focusTopics.length ? focusTopics : weakTopics).map((topic) => topic.name).join(', '),
       currentLevel: levelForScore(scorePercent),
     },
   };
@@ -213,7 +261,7 @@ async function previousAttemptComparison(attempt: AttemptRow, scorePercent: numb
     where: {
       userId: attempt.userId,
       studentId: attempt.studentId,
-      subjectId: attempt.subjectId,
+      ...sameSubjectsWhere(attempt),
       status: QuizAttemptStatus.SUBMITTED,
       scorePercent: { not: null },
       submittedAt: { lt: attempt.submittedAt },
@@ -279,16 +327,21 @@ async function retakeComparison(attempt: AttemptRow, breakdown: TopicBreakdown[]
 
 async function submittedAttemptView(attempt: AttemptRow) {
   const answers = (attempt.answers ?? {}) as Record<string, string>;
-  const breakdown = (attempt.topicBreakdown ?? []) as TopicBreakdown[];
+  const index = await getCatalogIndex();
+  const breakdown = ((attempt.topicBreakdown ?? []) as TopicBreakdown[]).map((topic) => ({
+    ...topic,
+    subjectId: topicSubjectId(topic, index.subjectIdByTopicId) ?? attempt.subjectId,
+  }));
   const scorePercent = attempt.scorePercent ?? 0;
-  const [questions, comparison, retake] = await Promise.all([
+  const [questions, comparison, retake, subjects] = await Promise.all([
     loadQuestionsInOrder(attempt.questionIds, false),
     previousAttemptComparison(attempt, scorePercent),
     retakeComparison(attempt, breakdown),
+    attemptSubjects(attempt),
   ]);
 
   return {
-    attempt: attemptSummary(attempt),
+    attempt: attemptSummary(attempt, subjects),
     result: {
       scorePercent,
       correctCount: attempt.correctCount ?? 0,
@@ -298,7 +351,17 @@ async function submittedAttemptView(attempt: AttemptRow) {
         ...topic,
         accuracyPercent: percent(topic.correct, topic.attempted),
       })),
-      tutoring: tutoringSuggestion(attempt, breakdown, scorePercent),
+      tutoring: tutoringSuggestion(attempt, breakdown, scorePercent, subjects),
+      // Score per subject, for a mixed exam.
+      subjects:
+        subjects.length > 1
+          ? subjects.map((subject) => {
+              const topics = breakdown.filter((topic) => topic.subjectId === subject.id);
+              const attempted = topics.reduce((sum, topic) => sum + topic.attempted, 0);
+              const correct = topics.reduce((sum, topic) => sum + topic.correct, 0);
+              return { ...subject, attempted, correct, scorePercent: percent(correct, attempted) };
+            })
+          : null,
       comparison,
       retake,
     },
@@ -352,6 +415,7 @@ async function retakePlan(user: QuizUser, input: StartAttemptInput) {
     input: {
       ...input,
       subjectId: original.subjectId,
+      subjectIds: original.subjectIds.length > 1 ? original.subjectIds : undefined,
       examId: original.examId ?? undefined,
       studentId: original.studentId ?? undefined,
       topicIds: targets.map((topic) => topic.topicId),
@@ -367,9 +431,10 @@ export async function startAttempt(user: QuizUser, requested: StartAttemptInput)
   const retake = requested.retakeOfAttemptId ? await retakePlan(user, requested) : null;
   const input = retake?.input ?? requested;
   const index = await getCatalogIndex();
-  const subject = index.subjectsById.get(input.subjectId);
+  const subjectIds = subjectList(input);
+  const subjects = subjectIds.map((id) => index.subjectsById.get(id));
 
-  if (!subject) {
+  if (subjectIds.length === 0 || subjects.some((subject) => !subject)) {
     throw new AppError(404, 'Subject not found');
   }
 
@@ -377,26 +442,39 @@ export async function startAttempt(user: QuizUser, requested: StartAttemptInput)
     throw new AppError(404, 'Exam not found');
   }
 
-  let topicFilter: Set<string> | null = null;
-  if (input.topicIds?.length) {
-    const subjectTopicIds = new Set(subject.topics.map((topic) => topic.id));
-    if (!input.topicIds.every((topicId) => subjectTopicIds.has(topicId))) {
-      throw new AppError(400, 'One or more topics do not belong to this subject');
+  // Topics may come from any chosen subject. A subject with none picked keeps
+  // all of its topics.
+  const topicIds = new Set(input.topicIds ?? []);
+  const subjectsWithPickedTopics = new Set<string>();
+  for (const topicId of topicIds) {
+    const owner = index.subjectIdByTopicId.get(topicId);
+    if (!owner || !subjectIds.includes(owner)) {
+      throw new AppError(400, 'One or more topics do not belong to the chosen subjects');
     }
-    topicFilter = new Set(input.topicIds);
+    subjectsWithPickedTopics.add(owner);
   }
 
   const studentId = input.studentId
     ? await assertOwnsStudent(user, input.studentId)
     : null;
 
-  const pool = await getQuestionPool(input.examId ?? null, input.subjectId);
-  const eligible = topicFilter
-    ? pool.filter((question) => topicFilter.has(question.topicId))
-    : pool;
+  const pools = await Promise.all(
+    subjectIds.map(async (subjectId) => {
+      const pool = await getQuestionPool(input.examId ?? null, subjectId);
+      return subjectsWithPickedTopics.has(subjectId)
+        ? pool.filter((question) => topicIds.has(question.topicId))
+        : pool;
+    }),
+  );
 
-  if (eligible.length === 0) {
-    throw new AppError(404, 'No questions are available for this selection yet');
+  const emptyAt = pools.findIndex((pool) => pool.length === 0);
+  if (emptyAt !== -1) {
+    throw new AppError(
+      404,
+      subjectIds.length > 1
+        ? `No questions are available for ${subjects[emptyAt]!.name} in this selection yet`
+        : 'No questions are available for this selection yet',
+    );
   }
 
   const [, recentAttempts] = await Promise.all([
@@ -409,7 +487,7 @@ export async function startAttempt(user: QuizUser, requested: StartAttemptInput)
       data: { status: QuizAttemptStatus.EXPIRED },
     }),
     prisma.quizAttempt.findMany({
-      where: { userId: user.id, subjectId: input.subjectId, studentId },
+      where: { userId: user.id, subjectId: { in: subjectIds }, studentId },
       orderBy: { startedAt: 'desc' },
       take: RECENT_ATTEMPTS_FOR_VARIETY,
       select: { questionIds: true },
@@ -420,9 +498,11 @@ export async function startAttempt(user: QuizUser, requested: StartAttemptInput)
     ...recentAttempts.flatMap((attempt) => attempt.questionIds),
     ...(retake?.avoid ?? []),
   ]);
-  const count = Math.min(input.count, eligible.length);
+  // Share the questions evenly between subjects (a subject short of questions
+  // passes its share on), then keep each subject together, like a real paper.
+  const quotas = shareQuestions(input.count, pools.map((pool) => pool.length));
   const questions = await loadQuestionsInOrder(
-    pickQuestionIds(eligible, count, seen),
+    pools.flatMap((pool, i) => pickQuestionIds(pool, quotas[i], seen)),
     true,
   );
 
@@ -441,7 +521,8 @@ export async function startAttempt(user: QuizUser, requested: StartAttemptInput)
       userId: user.id,
       studentId,
       examId: input.examId ?? null,
-      subjectId: input.subjectId,
+      subjectId: subjectIds[0],
+      subjectIds: subjectIds.length > 1 ? subjectIds : [],
       mode: input.mode,
       questionIds: questions.map((question) => question.id),
       totalQuestions: questions.length,
@@ -454,9 +535,26 @@ export async function startAttempt(user: QuizUser, requested: StartAttemptInput)
   });
 
   return {
-    attempt: attemptSummary(attempt),
+    attempt: attemptSummary(attempt, await attemptSubjects(attempt)),
     questions: questions.map(playableQuestion),
   };
+}
+
+/** Splits `total` questions between subjects as evenly as their pool sizes allow. */
+export function shareQuestions(total: number, available: number[]) {
+  const quotas = available.map(() => 0);
+  let left = Math.min(total, available.reduce((sum, n) => sum + n, 0));
+  while (left > 0) {
+    const open = available.flatMap((n, i) => (quotas[i] < n ? [i] : []));
+    const each = Math.max(1, Math.floor(left / open.length));
+    for (const i of open) {
+      if (left === 0) break;
+      const add = Math.min(each, available[i] - quotas[i], left);
+      quotas[i] += add;
+      left -= add;
+    }
+  }
+  return quotas;
 }
 
 async function findOwnAttempt(userId: string, attemptId: string) {
@@ -485,7 +583,7 @@ export async function getAttempt(user: QuizUser, attemptId: string) {
 
   const questions = await loadQuestionsInOrder(attempt.questionIds, false);
   return {
-    attempt: attemptSummary(attempt),
+    attempt: attemptSummary(attempt, await attemptSubjects(attempt)),
     questions: questions.map(playableQuestion),
   };
 }
@@ -512,7 +610,7 @@ export async function submitAttempt(
     select: {
       id: true,
       correctOptionId: true,
-      topic: { select: { id: true, name: true } },
+      topic: { select: { id: true, name: true, subjectId: true } },
     },
   });
 
@@ -536,6 +634,7 @@ export async function submitAttempt(
 
     const entry = topics.get(question.topic.id) ?? {
       topicId: question.topic.id,
+      subjectId: question.topic.subjectId,
       name: question.topic.name,
       attempted: 0,
       correct: 0,
@@ -617,12 +716,26 @@ export async function listAttempts(user: QuizUser, query: ListAttemptsQuery) {
       scorePercent: true,
       startedAt: true,
       submittedAt: true,
+      subjectIds: true,
       subject: { select: { id: true, name: true } },
     },
   });
 
   const hasMore = rows.length > query.limit;
-  const attempts = hasMore ? rows.slice(0, query.limit) : rows;
+  const page = hasMore ? rows.slice(0, query.limit) : rows;
+  const attempts = await Promise.all(
+    page.map(async ({ subjectIds, ...attempt }) => {
+      const subjects = await attemptSubjects({ subject: attempt.subject, subjectIds });
+      return {
+        ...attempt,
+        subject:
+          subjects.length > 1
+            ? { id: attempt.subject.id, name: subjectLabel(subjects) }
+            : attempt.subject,
+        subjects,
+      };
+    }),
+  );
 
   return {
     attempts,
@@ -745,12 +858,35 @@ export async function getProgress(user: QuizUser, query: ProgressQuery) {
       scorePercent: true,
       submittedAt: true,
       topicBreakdown: true,
+      subjectIds: true,
       subject: { select: { id: true, name: true } },
     },
   });
 
   // Oldest first, so the first entry is the baseline and the last is the latest.
-  const attempts = rows.reverse();
+  // A mixed exam counts once per subject, scored on that subject's questions.
+  const index = await getCatalogIndex();
+  const attempts = rows.reverse().flatMap((attempt) => {
+    if (attempt.subjectIds.length <= 1) return [attempt];
+    const breakdown = (attempt.topicBreakdown ?? []) as TopicBreakdown[];
+    return attempt.subjectIds.flatMap((subjectId) => {
+      const topics = breakdown.filter(
+        (topic) => topicSubjectId(topic, index.subjectIdByTopicId) === subjectId,
+      );
+      if (topics.length === 0) return [];
+      const attempted = topics.reduce((sum, topic) => sum + topic.attempted, 0);
+      const correct = topics.reduce((sum, topic) => sum + topic.correct, 0);
+      return [
+        {
+          ...attempt,
+          subjectId,
+          subject: { id: subjectId, name: index.subjectsById.get(subjectId)?.name ?? 'Subject' },
+          scorePercent: percent(correct, attempted),
+          topicBreakdown: topics as unknown as Prisma.JsonValue,
+        },
+      ];
+    });
+  });
 
   const bySubject = new Map<string, typeof attempts>();
   for (const attempt of attempts) {
@@ -839,7 +975,7 @@ export async function getProgress(user: QuizUser, query: ProgressQuery) {
   const comparable = subjects.filter((subject) => subject.changePoints !== null);
 
   return {
-    totalAttempts: attempts.length,
+    totalAttempts: rows.length,
     subjects,
     summary: {
       subjectsCompared: comparable.length,

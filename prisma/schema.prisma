@@ -715,7 +715,11 @@ model QuizAttempt {
   // Set when a parent takes the quiz on behalf of one of their children.
   studentId         String?
   examId            String?
+  // The first (or only) subject. A mixed exam also lists every subject it
+  // covers in `subjectIds`, in the order they appear; single-subject attempts
+  // leave `subjectIds` empty.
   subjectId         String
+  subjectIds        String[]          @default([])
   mode              QuizMode
   status            QuizAttemptStatus @default(IN_PROGRESS)
   // Ordered snapshot of the questions served, so grading never depends on the

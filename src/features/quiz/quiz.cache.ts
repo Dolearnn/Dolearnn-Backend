@@ -41,6 +41,8 @@ type CatalogIndex = {
   catalog: Catalog;
   examIds: Set<string>;
   subjectsById: Map<string, CatalogSubject>;
+  // Which subject each topic belongs to.
+  subjectIdByTopicId: Map<string, string>;
 };
 
 export type PoolQuestion = { id: string; topicId: string };
@@ -85,6 +87,9 @@ async function loadCatalogIndex(): Promise<CatalogIndex> {
     catalog: { exams, subjects, availability },
     examIds: new Set(exams.map((exam) => exam.id)),
     subjectsById: new Map(subjects.map((subject) => [subject.id, subject])),
+    subjectIdByTopicId: new Map(
+      subjects.flatMap((subject) => subject.topics.map((topic) => [topic.id, subject.id] as const)),
+    ),
   };
 }
 
