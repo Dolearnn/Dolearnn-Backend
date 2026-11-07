@@ -23,7 +23,8 @@ function dashboardUrlForRole(role: Role) {
 
   if (role === Role.ADMIN) return `${baseUrl}/admin`;
   if (role === Role.TEACHER) return `${baseUrl}/teacher`;
-  return `${baseUrl}/family`;
+  // Learners (and older parent accounts) share one learner workspace.
+  return `${baseUrl}/student`;
 }
 
 function escapeHtml(value: string) {

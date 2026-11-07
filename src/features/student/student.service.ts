@@ -1,6 +1,7 @@
-import { Prisma, Role } from '@prisma/client';
+import { GradeLevel, Prisma, Role } from '@prisma/client';
 import { AppError } from '../../lib/http';
 import { prisma } from '../../lib/prisma';
+import { gradeFromLearnerStage } from '../family/family.service';
 import type { GuestBaselineInput, UpdateLearnerProfileInput } from './student.schemas';
 
 type StudentUser = { id: string; role: Role };
@@ -78,6 +79,14 @@ export async function updateLearnerProfile(user: StudentUser, input: UpdateLearn
         : {}),
       onboardingCompleted: true,
     },
+  });
+
+  // Keep the learner's tutoring profile (if they have one yet) on the same stage,
+  // so their tutor sees the right class.
+  const grade = gradeFromLearnerStage(input.stage);
+  await prisma.student.updateMany({
+    where: { parent: { userId: user.id } },
+    data: { grade, gradeOther: grade === GradeLevel.OTHER ? 'Not set yet' : null },
   });
 
   return profileView(user.id);

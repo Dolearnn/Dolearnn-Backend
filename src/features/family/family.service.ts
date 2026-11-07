@@ -7,6 +7,7 @@ import {
   CancellationStatus,
   LessonPackageStatus,
   DayOfWeek,
+  GradeLevel,
   Prisma,
   ProposalStatus,
   Role,
@@ -35,22 +36,86 @@ import type {
   UpdateStudentInput,
 } from './family.schemas';
 
+/*
+ * One account per learner.
+ *
+ * Tutoring, sessions and payments are stored against a "Student" row owned by a
+ * ParentProfile (the paying account). A learner account owns exactly one of
+ * each, created on first use from the learner's own name and stage, so the
+ * learner never sees or manages "child profiles". Older PARENT accounts keep
+ * working through the same code path.
+ */
 function assertParent(role: Role) {
-  if (role !== Role.PARENT) {
-    throw new AppError(403, 'Only family accounts can use this route');
+  if (role !== Role.STUDENT && role !== Role.PARENT) {
+    throw new AppError(403, 'Only learner accounts can use this route');
   }
 }
 
-async function getParentProfile(userId: string) {
-  const parent = await prisma.parentProfile.findUnique({
-    where: { userId },
-    include: {
-      user: true,
-    },
+function assertCanManageProfiles(role: Role) {
+  if (role === Role.STUDENT) {
+    throw new AppError(403, 'Your account is your learner profile; there are no extra profiles to manage');
+  }
+}
+
+const gradeForStage: Record<string, GradeLevel> = {
+  SS2: GradeLevel.SS2,
+  SS3: GradeLevel.SS3,
+  RECENT_SCHOOL_LEAVER: GradeLevel.SCHOOL_LEAVER,
+};
+
+export function gradeFromLearnerStage(stage: string | null | undefined) {
+  return (stage && gradeForStage[stage]) || GradeLevel.OTHER;
+}
+
+/** Creates (once) the paying account and the single tutoring profile of a learner. */
+async function ensureLearnerAccount(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { learnerProfile: true },
   });
+  if (!user || user.role !== Role.STUDENT) return null;
+
+  return prisma.$transaction(async (tx) => {
+    const parent = await tx.parentProfile.upsert({
+      where: { userId },
+      update: {},
+      create: { userId },
+      include: { user: true },
+    });
+    const existing = await tx.student.count({ where: { parentId: parent.id } });
+    if (existing === 0) {
+      const grade = gradeFromLearnerStage(user.learnerProfile?.stage);
+      await tx.student.create({
+        data: {
+          parentId: parent.id,
+          fullName: user.name,
+          age: null,
+          grade,
+          gradeOther: grade === GradeLevel.OTHER ? 'Not set yet' : null,
+        },
+      });
+    }
+    return parent;
+  });
+}
+
+async function getParentProfile(userId: string) {
+  const parent =
+    (await prisma.parentProfile.findUnique({
+      where: { userId },
+      include: {
+        user: true,
+      },
+    })) ?? (await ensureLearnerAccount(userId));
 
   if (!parent) {
-    throw new AppError(404, 'Parent profile not found');
+    throw new AppError(404, 'Account profile not found');
+  }
+
+  // A learner whose account predates the automatic tutoring profile.
+  if (parent.user.role === Role.STUDENT) {
+    const hasProfile = await prisma.student.count({ where: { parentId: parent.id } });
+    if (hasProfile === 0) await ensureLearnerAccount(userId);
   }
 
   return parent;
@@ -265,6 +330,7 @@ export async function createStudent(
   input: CreateStudentInput,
 ) {
   assertParent(role);
+  assertCanManageProfiles(role);
   const parent = await getParentProfile(userId);
 
   return prisma.student.create({
@@ -398,6 +464,7 @@ export async function deactivateStudent(
   input: DeactivateStudentInput,
 ) {
   assertParent(role);
+  assertCanManageProfiles(role);
   const student = await getOwnedStudent(userId, studentId);
 
   return prisma.$transaction(async (tx) => {

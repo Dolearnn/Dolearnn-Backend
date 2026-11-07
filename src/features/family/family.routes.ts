@@ -33,7 +33,8 @@ import {
 
 export const familyRoutes = Router();
 
-familyRoutes.use(requireAuth, requireRole(Role.PARENT));
+// Learner accounts (and older parent accounts) use tutoring, sessions and payments.
+familyRoutes.use(requireAuth, requireRole(Role.STUDENT, Role.PARENT));
 
 function getRouteParam(value: string | string[], name: string) {
   if (Array.isArray(value)) {

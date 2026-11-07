@@ -136,8 +136,9 @@ export async function registerAccount(input: RegisterInput) {
   const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
   const name = input.name.trim();
   const whatsapp = input.whatsapp?.trim() || null;
-  const isStudent = input.accountType === Role.STUDENT;
 
+  // One account type: the learner. The account profile holds billing/contact
+  // details; the tutoring profile is created when the learner first needs it.
   const user = await prisma.$transaction(async (tx) => {
     const created = await tx.user.create({
       data: {
@@ -145,19 +146,16 @@ export async function registerAccount(input: RegisterInput) {
         name,
         passwordHash,
         authProvider: AuthProvider.EMAIL,
-        role: input.accountType,
-        ...(isStudent
-          ? { learnerProfile: { create: {} } }
-          : { parentProfile: { create: { whatsapp } } }),
+        role: Role.STUDENT,
+        learnerProfile: { create: {} },
+        parentProfile: { create: { whatsapp } },
       },
     });
 
     await createAdminNotifications(
       {
-        title: isStudent ? 'New learner registered' : 'New family registered',
-        body: isStudent
-          ? `${name} just created a learner account. Email: ${email}.`
-          : `${name} just signed up. Email: ${email}. WhatsApp: ${whatsapp ?? 'not provided'}.`,
+        title: 'New learner registered',
+        body: `${name} just created an account. Email: ${email}. WhatsApp: ${whatsapp ?? 'not provided'}.`,
       },
       tx,
     );
@@ -231,7 +229,6 @@ export async function loginOrRegisterWithGoogle(input: GoogleAuthInput) {
   });
 
   if (!existingByEmail) {
-    const isStudent = input.accountType === Role.STUDENT;
     const user = await prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
         data: {
@@ -239,17 +236,16 @@ export async function loginOrRegisterWithGoogle(input: GoogleAuthInput) {
           name: googleUser.name,
           googleId: googleUser.googleId,
           authProvider: AuthProvider.GOOGLE,
-          role: input.accountType,
-          ...(isStudent
-            ? { learnerProfile: { create: {} } }
-            : { parentProfile: { create: {} } }),
+          role: Role.STUDENT,
+          learnerProfile: { create: {} },
+          parentProfile: { create: {} },
         },
       });
 
       await createAdminNotifications(
         {
-          title: isStudent ? 'New learner registered' : 'New family registered',
-          body: `${googleUser.name} just signed up with Google as ${isStudent ? 'a learner' : 'a family'}. Email: ${googleUser.email}.`,
+          title: 'New learner registered',
+          body: `${googleUser.name} just signed up with Google. Email: ${googleUser.email}.`,
         },
         tx,
       );

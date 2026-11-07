@@ -165,6 +165,14 @@ export async function createAdminStudent(
     throw new AppError(404, 'Parent not found');
   }
 
+  // A learner account has exactly one tutoring profile (its own).
+  if (parent.user.role === Role.STUDENT) {
+    const existing = await prisma.student.count({ where: { parentId: parent.id } });
+    if (existing > 0) {
+      throw new AppError(409, 'This learner account already has its profile; edit that one instead');
+    }
+  }
+
   return prisma.$transaction(async (tx) => {
     const student = await tx.student.create({
       data: {
