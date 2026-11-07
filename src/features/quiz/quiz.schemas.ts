@@ -38,6 +38,12 @@ export const progressQuerySchema = z.object({
   studentId: z.string().trim().min(1).optional(),
 });
 
+export const leaderboardPrivacySchema = z.object({
+  hidden: z.boolean(),
+  // A parent sets this for one of their children.
+  studentId: z.string().trim().min(1).optional(),
+});
+
 export type StartAttemptInput = z.infer<typeof startAttemptSchema>;
 export type ProgressQuery = z.infer<typeof progressQuerySchema>;
 export type SubmitAttemptInput = z.infer<typeof submitAttemptSchema>;

@@ -3,6 +3,7 @@ import { AppError, asyncHandler } from '../../lib/http';
 import { requireAuth } from '../../middleware/auth';
 import { rateLimit } from '../../middleware/rate-limit';
 import {
+  leaderboardPrivacySchema,
   listAttemptsQuerySchema,
   progressQuerySchema,
   startAttemptSchema,
@@ -10,8 +11,13 @@ import {
   weakTopicsQuerySchema,
 } from './quiz.schemas';
 import { aiExplanationsEnabled, explainQuestion } from './quiz-ai.service';
+import { getAchievements } from './quiz-achievements.service';
 import { getDiagnosis } from './quiz-diagnosis.service';
-import { getRewards, getWeeklyLeaderboard } from './quiz-rewards.service';
+import {
+  getRewards,
+  getWeeklyLeaderboard,
+  setLeaderboardPrivacy,
+} from './quiz-rewards.service';
 import {
   getAttempt,
   getCatalog,
@@ -161,6 +167,24 @@ quizRoutes.get(
   asyncHandler(async (req, res) => {
     const query = progressQuerySchema.parse(req.query);
     res.json(await getWeeklyLeaderboard(req.user!, query));
+  }),
+);
+
+// Badges and this week's missions for the caller (or one of a family's children).
+quizRoutes.get(
+  '/achievements',
+  asyncHandler(async (req, res) => {
+    const query = progressQuerySchema.parse(req.query);
+    res.json(await getAchievements(req.user!, query));
+  }),
+);
+
+// Hide or show the caller's (or their child's) name on the leaderboard.
+quizRoutes.patch(
+  '/leaderboard/privacy',
+  asyncHandler(async (req, res) => {
+    const input = leaderboardPrivacySchema.parse(req.body);
+    res.json(await setLeaderboardPrivacy(req.user!, input));
   }),
 );
 

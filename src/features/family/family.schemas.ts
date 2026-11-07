@@ -8,11 +8,22 @@ import {
 } from '@prisma/client';
 import { z } from 'zod';
 
+// Grades offered to families: the SS2/SS3 + school-leaver target group (plus SS1
+// for early starters). Older GradeLevel values remain valid in the database only.
+export const OFFERED_GRADES = [
+  GradeLevel.SS1,
+  GradeLevel.SS2,
+  GradeLevel.SS3,
+  GradeLevel.SCHOOL_LEAVER,
+  GradeLevel.OTHER,
+] as const;
+export const gradeSchema = z.enum(OFFERED_GRADES);
+
 export const createStudentSchema = z
   .object({
     fullName: z.string().trim().min(2, 'Student name is required'),
-    age: z.coerce.number().int().min(3).max(25),
-    grade: z.nativeEnum(GradeLevel),
+    age: z.coerce.number().int().min(10).max(25),
+    grade: gradeSchema,
     gradeOther: z.string().trim().optional(),
     school: z.string().trim().optional(),
   })

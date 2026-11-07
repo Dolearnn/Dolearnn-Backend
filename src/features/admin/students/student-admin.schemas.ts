@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { GradeLevel } from '@prisma/client';
-import { saveIntakeSchema } from '../../family/family.schemas';
+import { gradeSchema, saveIntakeSchema } from '../../family/family.schemas';
 import { safeMeetingLinkSchema } from '../../../lib/urls';
 
 export const listStudentsQuerySchema = z.object({
@@ -15,8 +15,8 @@ export const createAdminStudentSchema = z
   .object({
     parentId: z.string().min(1, 'Parent is required'),
     fullName: z.string().trim().min(2, 'Student name is required'),
-    age: z.coerce.number().int().min(3).max(25),
-    grade: z.nativeEnum(GradeLevel),
+    age: z.coerce.number().int().min(10).max(25),
+    grade: gradeSchema,
     gradeOther: z.string().trim().optional(),
     school: z.string().trim().optional(),
     intake: saveIntakeSchema.optional(),

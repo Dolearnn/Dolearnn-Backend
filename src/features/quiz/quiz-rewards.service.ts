@@ -17,7 +17,7 @@ import { assertOwnsStudent } from './quiz.service';
  * Days and weeks follow Nigerian time (Africa/Lagos, UTC+1, no daylight saving).
  */
 
-type RewardsUser = { id: string; role: Role };
+export type RewardsUser = { id: string; role: Role };
 
 const XP_PER_CORRECT = 10;
 const XP_FOR_COMPLETION = 20;
@@ -34,15 +34,15 @@ export const LEVELS = [
 ] as const;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const LAGOS_OFFSET_MS = 60 * 60 * 1000;
+export const LAGOS_OFFSET_MS = 60 * 60 * 1000;
 
 // "YYYY-MM-DD" for today in Lagos.
-function lagosToday() {
+export function lagosToday() {
   return new Date(Date.now() + LAGOS_OFFSET_MS).toISOString().slice(0, 10);
 }
 
 // Monday of the current Lagos week, as "YYYY-MM-DD".
-function lagosWeekStart() {
+export function lagosWeekStart() {
   const today = new Date(`${lagosToday()}T00:00:00Z`);
   const sinceMonday = (today.getUTCDay() + 6) % 7;
   return new Date(today.getTime() - sinceMonday * DAY_MS).toISOString().slice(0, 10);
@@ -89,7 +89,7 @@ function levelFor(xp: number) {
   };
 }
 
-function streaksFor(activeDays: string[], today: string) {
+export function streaksFor(activeDays: string[], today: string) {
   const days = [...new Set(activeDays)].map(dayNumber).sort((a, b) => a - b);
   if (days.length === 0) return { current: 0, best: 0, activeToday: false };
 
@@ -114,7 +114,7 @@ function publicName(fullName: string | null) {
   return `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}.`;
 }
 
-async function learnerKey(user: RewardsUser, studentId?: string) {
+export async function learnerKey(user: RewardsUser, studentId?: string) {
   return studentId ? await assertOwnsStudent(user, studentId) : null;
 }
 
@@ -158,7 +158,14 @@ export async function getWeeklyLeaderboard(user: RewardsUser, query: { studentId
 
   // Rank every learner with XP this week, then keep the top N plus the caller.
   const rows = await prisma.$queryRaw<
-    Array<{ userId: string; studentId: string | null; name: string | null; xp: number; rank: bigint }>
+    Array<{
+      userId: string;
+      studentId: string | null;
+      name: string | null;
+      hidden: boolean;
+      xp: number;
+      rank: bigint;
+    }>
   >`
     WITH ${dailyXpCte},
     weekly AS (
@@ -174,7 +181,10 @@ export async function getWeeklyLeaderboard(user: RewardsUser, query: { studentId
       FROM weekly w
     )
     SELECT r."userId", r."studentId", r.xp, r.rank,
-           COALESCE(s."fullName", u.name) AS name
+           COALESCE(s."fullName", u.name) AS name,
+           -- A child's own setting (set by the parent), otherwise the account's.
+           CASE WHEN r."studentId" IS NOT NULL THEN s."hideFromLeaderboard"
+                ELSE u."hideFromLeaderboard" END AS hidden
     FROM ranked r
     JOIN "User" u ON u.id = r."userId"
     LEFT JOIN "Student" s ON s.id = r."studentId"
@@ -188,7 +198,9 @@ export async function getWeeklyLeaderboard(user: RewardsUser, query: { studentId
     .slice(0, LEADERBOARD_SIZE)
     .map((row) => ({
       rank: Number(row.rank),
-      name: publicName(row.name),
+      // Hidden learners keep their rank (so everyone else's stays honest) but
+      // not their name. You always see your own name.
+      name: row.hidden && !isMe(row) ? HIDDEN_NAME : publicName(row.name),
       xp: row.xp,
       isMe: isMe(row),
     }));
@@ -198,5 +210,43 @@ export async function getWeeklyLeaderboard(user: RewardsUser, query: { studentId
     weekStart,
     entries,
     me: mine ? { rank: Number(mine.rank), xp: mine.xp } : null,
+    hidden: await isHidden(user, studentId),
   };
+}
+
+const HIDDEN_NAME = 'Hidden learner';
+
+async function isHidden(user: RewardsUser, studentId: string | null) {
+  if (studentId) {
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: { hideFromLeaderboard: true },
+    });
+    return student?.hideFromLeaderboard ?? false;
+  }
+  const account = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { hideFromLeaderboard: true },
+  });
+  return account?.hideFromLeaderboard ?? false;
+}
+
+/** Hide or show a learner's name on the leaderboard. Parents set it per child. */
+export async function setLeaderboardPrivacy(
+  user: RewardsUser,
+  input: { hidden: boolean; studentId?: string },
+) {
+  const studentId = await learnerKey(user, input.studentId);
+  if (studentId) {
+    await prisma.student.update({
+      where: { id: studentId },
+      data: { hideFromLeaderboard: input.hidden },
+    });
+  } else {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { hideFromLeaderboard: input.hidden },
+    });
+  }
+  return { hidden: input.hidden };
 }

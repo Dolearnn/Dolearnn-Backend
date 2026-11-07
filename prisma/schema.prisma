@@ -26,7 +26,13 @@ enum AccountStatus {
   TERMINATED
 }
 
+// Offered today: SS1, SS2, SS3, SCHOOL_LEAVER, OTHER (the WAEC/UTME target group).
+// The older values stay only so existing rows and the database type remain valid.
 enum GradeLevel {
+  SS1
+  SS2
+  SS3
+  SCHOOL_LEAVER
   PRIMARY
   JSS
   SSS
@@ -201,6 +207,8 @@ model User {
   name               String
   role               Role
   status             AccountStatus @default(ACTIVE)
+  // Show as "Hidden learner" on the weekly leaderboard (still ranked).
+  hideFromLeaderboard Boolean      @default(false)
   tokenVersion       Int           @default(0)
   mustChangePassword Boolean       @default(false)
   createdAt          DateTime      @default(now())
@@ -289,13 +297,15 @@ model Student {
   parentId           String
   assignedTeacherId  String?
   fullName           String
-  age                Int
+  age                Int?
   grade              GradeLevel
   gradeOther         String?
   school             String?
   status             AccountStatus @default(ACTIVE)
   deactivationReason String?
   deactivatedAt      DateTime?
+  // Set by the parent: show this child as "Hidden learner" on the leaderboard.
+  hideFromLeaderboard Boolean      @default(false)
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 

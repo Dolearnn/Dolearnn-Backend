@@ -69,8 +69,8 @@ export const openApiSpec = swaggerJSDoc({
             whatsapp: { type: 'string', example: '+447700900123' },
             accountType: {
               type: 'string',
-              enum: ['STUDENT', 'PARENT'],
-              default: 'STUDENT',
+              deprecated: true,
+              description: 'Ignored. Every self-service account is a learner account.',
             },
           },
         },
@@ -89,8 +89,8 @@ export const openApiSpec = swaggerJSDoc({
             idToken: { type: 'string' },
             accountType: {
               type: 'string',
-              enum: ['STUDENT', 'PARENT'],
-              default: 'STUDENT',
+              deprecated: true,
+              description: 'Ignored. Every self-service account is a learner account.',
             },
           },
         },
@@ -130,10 +130,11 @@ export const openApiSpec = swaggerJSDoc({
           required: ['fullName', 'age', 'grade'],
           properties: {
             fullName: { type: 'string', example: 'Zara Okafor' },
-            age: { type: 'number', example: 14 },
+            age: { type: 'number', example: 16 },
             grade: {
               type: 'string',
-              example: 'JSS',
+              enum: ['SS1', 'SS2', 'SS3', 'SCHOOL_LEAVER', 'OTHER'],
+              example: 'SS3',
             },
             gradeOther: { type: 'string' },
             school: { type: 'string', example: 'Bright Future Academy' },

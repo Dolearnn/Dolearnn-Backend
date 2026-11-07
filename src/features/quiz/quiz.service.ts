@@ -41,7 +41,7 @@ const STALE_ATTEMPT_MS = 12 * 60 * 60 * 1000;
 // How many recent attempts to look at so a retake prefers unseen questions.
 const RECENT_ATTEMPTS_FOR_VARIETY = 3;
 // A topic needs this many answered questions before we call it weak.
-const MIN_TOPIC_SAMPLE = 3;
+export const MIN_TOPIC_SAMPLE = 3;
 const WEAK_TOPIC_BELOW_PERCENT = 60;
 // A retake asks about as many questions as the original did on the same topics.
 const RETAKE_MIN_QUESTIONS = 5;

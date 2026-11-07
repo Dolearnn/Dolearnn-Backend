@@ -16,6 +16,7 @@ import {
   assertTeacherHasNoSchedulingConflict,
 } from '../../lib/session-conflicts';
 import { createAuditLog, type AuditActor } from '../audit/audit.service';
+import { learningSummaries } from './teacher-insights';
 import {
   createAdminNotifications,
   createNotification,
@@ -226,7 +227,7 @@ export async function teacherPayouts(userId: string, role: Role) {
 export async function teacherStudents(userId: string, role: Role) {
   assertTeacher(role);
   const teacher = await getTeacherProfile(userId);
-  return prisma.student.findMany({
+  const students = await prisma.student.findMany({
     where: {
       OR: [
         { assignedTeacherId: teacher.id },
@@ -260,6 +261,18 @@ export async function teacherStudents(userId: string, role: Role) {
     },
     orderBy: { createdAt: 'desc' },
   });
+
+  // What the student is struggling with, so the tutor can plan the lesson.
+  const summaries = await learningSummaries(
+    students.map((student) => ({
+      studentId: student.id,
+      learnerUserId: student.parent.user.role === Role.STUDENT ? student.parent.userId : null,
+    })),
+  );
+  return students.map((student) => ({
+    ...student,
+    learningSummary: summaries.get(student.id) ?? null,
+  }));
 }
 
 export async function teacherSessions(userId: string, role: Role) {
