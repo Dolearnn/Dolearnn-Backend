@@ -4,7 +4,7 @@
  *
  *   npm run email:test -- you@example.com
  */
-import { describeEmailConfig, sendEmail } from '../src/lib/email';
+import { closeEmail, describeEmailConfig, sendEmail } from '../src/lib/email';
 
 async function main() {
   const to = process.argv[2];
@@ -30,7 +30,9 @@ async function main() {
   console.log(`Sent. Provider message id: ${id}. Check the inbox (and spam folder) of ${to}.`);
 }
 
-main().catch((error) => {
-  console.error((error as Error).message);
-  process.exitCode = 1;
-});
+main()
+  .catch((error) => {
+    console.error((error as Error).message);
+    process.exitCode = 1;
+  })
+  .finally(closeEmail);

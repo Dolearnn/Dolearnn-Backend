@@ -1,4 +1,5 @@
 import sgMail from '@sendgrid/mail';
+import nodemailer, { type Transporter } from 'nodemailer';
 import { Resend } from 'resend';
 import { env } from '../config/env';
 
@@ -34,6 +35,10 @@ function emailProviderConfigError() {
 
   if (env.EMAIL_PROVIDER === 'sendgrid' && !env.SENDGRID_API_KEY) {
     return 'SENDGRID_API_KEY is not configured';
+  }
+
+  if (env.EMAIL_PROVIDER === 'smtp' && !env.SMTP_HOST) {
+    return 'SMTP_HOST is not configured';
   }
 
   return null;
@@ -104,6 +109,46 @@ async function sendWithSendGrid(message: EmailMessage) {
   }
 }
 
+let smtpTransporter: Transporter | null = null;
+
+function getSmtpTransporter() {
+  // One pooled connection is reused for every email instead of reconnecting each time.
+  smtpTransporter ??= nodemailer.createTransport({
+    host: env.SMTP_HOST,
+    port: env.SMTP_PORT,
+    secure: env.SMTP_SECURE,
+    pool: true,
+    // Fail within seconds instead of hanging when the server can't be reached.
+    connectionTimeout: 15_000,
+    greetingTimeout: 15_000,
+    socketTimeout: 30_000,
+    auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined,
+  });
+  return smtpTransporter;
+}
+
+async function sendWithSmtp(message: EmailMessage) {
+  const from = fromAddress();
+
+  if (!env.SMTP_HOST || !from) {
+    warnEmailDisabled();
+    return;
+  }
+
+  try {
+    const info = await getSmtpTransporter().sendMail({
+      from,
+      to: message.to,
+      subject: message.subject,
+      text: message.text,
+      html: message.html,
+    });
+    return info.messageId;
+  } catch (error) {
+    throw new Error(`SMTP server rejected the email to ${message.to}: ${(error as Error).message}`);
+  }
+}
+
 /**
  * Sends one email. Returns the provider's message id, or undefined when email
  * is not configured (a warning is logged once). Throws when the provider
@@ -119,7 +164,9 @@ export async function sendEmail(message: EmailMessage) {
   const id =
     env.EMAIL_PROVIDER === 'resend'
       ? await sendWithResend(message)
-      : await sendWithSendGrid(message);
+      : env.EMAIL_PROVIDER === 'smtp'
+        ? await sendWithSmtp(message)
+        : await sendWithSendGrid(message);
 
   console.info(`Email sent via ${env.EMAIL_PROVIDER} to ${message.to}: "${message.subject}" (${id ?? 'no id'})`);
   return id;
@@ -133,6 +180,12 @@ export async function sendBulkEmail(messages: EmailMessage[]) {
       console.error('Email delivery failed:', (result.reason as Error).message);
     }
   }
+}
+
+/** Closes the pooled SMTP connection so short-lived scripts can exit. */
+export function closeEmail() {
+  smtpTransporter?.close();
+  smtpTransporter = null;
 }
 
 /** One-line description of the email setup, for the startup log. */
