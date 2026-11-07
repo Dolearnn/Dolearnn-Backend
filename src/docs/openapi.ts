@@ -101,8 +101,6 @@ export const openApiSpec = swaggerJSDoc({
             'lastName',
             'email',
             'subjects',
-            'hourlyRate',
-            'defaultPassword',
           ],
           properties: {
             firstName: { type: 'string', example: 'Daniel' },
@@ -441,7 +439,7 @@ export const openApiSpec = swaggerJSDoc({
                 schema: {
                   type: 'object',
                   required: ['hourlyRate'],
-                  properties: { hourlyRate: { type: 'number', example: 25 } },
+                  properties: { hourlyRate: { type: 'number', example: 5000, description: 'Tutor pay per session, in naira' } },
                 },
               },
             },

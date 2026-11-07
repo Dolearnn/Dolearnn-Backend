@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import { randomBytes } from 'node:crypto';
 import {
   AccountStatus,
   AuthProvider,
@@ -14,6 +15,7 @@ import { defaultTutorPay } from '../../../lib/pricing';
 import { AppError } from '../../../lib/http';
 import { prisma } from '../../../lib/prisma';
 import { createAuditLog, type AuditActor } from '../../audit/audit.service';
+import { sendTutorInvite } from './teacher-invite';
 import type {
   CreateTeacherInput,
   ListTeachersQueryInput,
@@ -166,7 +168,10 @@ export async function createTeacher(input: CreateTeacherInput) {
     throw new AppError(409, 'An account already exists for this email');
   }
 
-  const passwordHash = await bcrypt.hash(input.defaultPassword, 12);
+  // Normally the tutor sets their own password from the invite email; the
+  // starting password is then random and never shown to anyone.
+  const startingPassword = input.defaultPassword || randomBytes(24).toString('base64url');
+  const passwordHash = await bcrypt.hash(startingPassword, 12);
   const name = `${input.firstName.trim()} ${input.lastName.trim()}`;
 
   const user = await prisma.user.create({
@@ -205,7 +210,35 @@ export async function createTeacher(input: CreateTeacherInput) {
     throw new AppError(500, 'Teacher profile could not be created');
   }
 
-  return displayTeacher(user.teacherProfile);
+  // The tutor exists even if the email fails; the admin can resend the invite.
+  const inviteSent = await sendTutorInvite(user).catch((error) => {
+    console.error(`Tutor invite to ${user.email} failed:`, (error as Error).message);
+    return false;
+  });
+
+  return { teacher: displayTeacher(user.teacherProfile), inviteSent };
+}
+
+/** Sends a fresh invite (e.g. the first one expired or was lost). */
+export async function resendTeacherInvite(teacherId: string) {
+  const teacher = await prisma.teacherProfile.findUnique({
+    where: { id: teacherId },
+    include: { user: true },
+  });
+  if (!teacher) {
+    throw new AppError(404, 'Teacher not found');
+  }
+  if (teacher.user.status !== AccountStatus.ACTIVE) {
+    throw new AppError(409, 'This tutor account is not active');
+  }
+
+  const inviteSent = await sendTutorInvite(teacher.user).catch((error) => {
+    throw new AppError(502, `The invite email could not be sent: ${(error as Error).message}`);
+  });
+  if (!inviteSent) {
+    throw new AppError(503, 'Email is not configured, so the invite could not be sent');
+  }
+  return { inviteSent };
 }
 
 export async function updateTeacherRate(

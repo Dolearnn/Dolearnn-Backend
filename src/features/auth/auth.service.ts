@@ -61,7 +61,12 @@ function resetPasswordLink(token: string) {
   return `${env.FRONTEND_URL.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(token)}`;
 }
 
-function signResetPasswordToken(user: Pick<User, 'id' | 'email' | 'updatedAt'>) {
+// The token carries the account's updatedAt, so it stops working as soon as
+// the password is set (or the account changes): every link is single-use.
+function signResetPasswordToken(
+  user: Pick<User, 'id' | 'email' | 'updatedAt'>,
+  expiresIn: SignOptions['expiresIn'] = `${env.RESET_PASSWORD_EXPIRES_IN_MINUTES}m`,
+) {
   return jwt.sign(
     {
       purpose: 'reset-password',
@@ -71,9 +76,20 @@ function signResetPasswordToken(user: Pick<User, 'id' | 'email' | 'updatedAt'>) 
     jwtSecret(),
     {
       subject: user.id,
-      expiresIn: `${env.RESET_PASSWORD_EXPIRES_IN_MINUTES}m`,
+      expiresIn,
     },
   );
+}
+
+/**
+ * A single-use link that lets someone choose their own password, e.g. a new
+ * tutor accepting an invite. Uses the reset-password page and checks.
+ */
+export function passwordSetupLink(
+  user: Pick<User, 'id' | 'email' | 'updatedAt'>,
+  expiresIn: SignOptions['expiresIn'],
+) {
+  return resetPasswordLink(signResetPasswordToken(user, expiresIn));
 }
 
 function verifyResetPasswordToken(token: string) {

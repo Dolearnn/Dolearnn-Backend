@@ -10,6 +10,7 @@ import {
   createTeacher,
   listTeachers,
   listTeachersPage,
+  resendTeacherInvite,
   terminateTeacher,
   updateTeacherRate,
 } from './teacher-admin.service';
@@ -42,8 +43,17 @@ teacherAdminRoutes.post(
   '/',
   asyncHandler(async (req, res) => {
     const input = createTeacherSchema.parse(req.body);
-    const teacher = await createTeacher(input);
-    res.status(201).json({ teacher });
+    const { teacher, inviteSent } = await createTeacher(input);
+    res.status(201).json({ teacher, inviteSent });
+  }),
+);
+
+// Email the tutor a new link to set their password.
+teacherAdminRoutes.post(
+  '/:teacherId/invite',
+  asyncHandler(async (req, res) => {
+    const teacherId = getRouteParam(req.params.teacherId, 'teacher id');
+    res.json(await resendTeacherInvite(teacherId));
   }),
 );
 

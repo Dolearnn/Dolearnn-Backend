@@ -31,7 +31,11 @@ export const createTeacherSchema = z.object({
   qualifications: z.array(z.string().trim().min(1)).default([]),
   // Left empty or 0: the default tutor share (50% of the session price).
   hourlyRate: tutorPaySchema.optional(),
-  defaultPassword: z.string().min(8, 'Default password must be at least 8 characters'),
+  // Optional: normally the tutor sets their own password from the invite email.
+  defaultPassword: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().min(8, 'Starting password must be at least 8 characters').optional(),
+  ),
 });
 
 export const updateTeacherRateSchema = z.object({
