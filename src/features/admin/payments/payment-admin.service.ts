@@ -400,7 +400,9 @@ export async function listPayoutSummaries(month = currentMonth()) {
       0,
     );
     const verifiedHours = verifiedMinutes / 60;
-    const amount = verifiedHours * asNumber(teacher.hourlyRate);
+    // Tutors are paid per verified session at their own rate (hourlyRate holds
+    // the per-session pay; by default 50% of the session price).
+    const amount = teacherSessions.length * asNumber(teacher.hourlyRate);
     const payout = payoutsByTeacher.get(teacher.id);
 
     return {

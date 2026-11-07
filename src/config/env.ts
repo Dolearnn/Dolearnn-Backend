@@ -22,11 +22,24 @@ const envSchema = z.object({
     .optional()
     .transform((value) => value === 'true'),
   GOOGLE_CLIENT_ID: optionalNonEmptyString,
-  EMAIL_PROVIDER: z.enum(['resend', 'sendgrid']).optional(),
+  EMAIL_PROVIDER: z.enum(['resend', 'sendgrid', 'smtp']).optional(),
   EMAIL_FROM_EMAIL: z.string().email().optional(),
   EMAIL_FROM_NAME: optionalNonEmptyString,
   RESEND_API_KEY: optionalNonEmptyString,
   SENDGRID_API_KEY: optionalNonEmptyString,
+  // Used when EMAIL_PROVIDER=smtp (sent through nodemailer).
+  SMTP_HOST: optionalNonEmptyString,
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  // true for port 465 (TLS from the start); false for 587/25 (STARTTLS).
+  SMTP_SECURE: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((value) => value === 'true'),
+  SMTP_USER: optionalNonEmptyString,
+  SMTP_PASS: optionalNonEmptyString,
+  // What a learner pays for one tutoring session, in naira. Tutors are paid
+  // their own per-session rate (by default 50% of this).
+  TUTORING_SESSION_PRICE: z.coerce.number().positive().default(10000),
   // AI features stay switched off until a key is set.
   ANTHROPIC_API_KEY: optionalNonEmptyString,
   // Which Claude model writes explanations. Explanations are generated once per

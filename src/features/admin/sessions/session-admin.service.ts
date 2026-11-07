@@ -9,6 +9,7 @@ import {
   Role,
   SessionStatus,
 } from '@prisma/client';
+import { env } from '../../../config/env';
 import { AppError } from '../../../lib/http';
 import { prisma } from '../../../lib/prisma';
 import {
@@ -296,7 +297,8 @@ export async function scheduleBookingRequest(
             startsAt,
             durationMins: 60,
             meetLink,
-            amount: assignment.teacher.hourlyRate,
+            // The learner pays the standard session price; the tutor is paid their own rate.
+            amount: env.TUTORING_SESSION_PRICE,
           },
           include: sessionInclude,
         }),
@@ -419,7 +421,7 @@ export async function createAdminSession(input: CreateAdminSessionInput) {
         startsAt,
         durationMins: input.durationMins,
         meetLink,
-        amount: assignment.teacher.hourlyRate,
+        amount: env.TUTORING_SESSION_PRICE,
       },
       include: sessionInclude,
     });

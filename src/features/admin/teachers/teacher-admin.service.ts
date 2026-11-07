@@ -10,6 +10,7 @@ import {
   type TeacherProfile,
   type User,
 } from '@prisma/client';
+import { defaultTutorPay } from '../../../lib/pricing';
 import { AppError } from '../../../lib/http';
 import { prisma } from '../../../lib/prisma';
 import { createAuditLog, type AuditActor } from '../../audit/audit.service';
@@ -189,7 +190,7 @@ export async function createTeacher(input: CreateTeacherInput) {
           qualifications: input.qualifications.map((qualification) =>
             qualification.trim(),
           ),
-          hourlyRate: input.hourlyRate,
+          hourlyRate: input.hourlyRate || defaultTutorPay(),
         },
       },
     },

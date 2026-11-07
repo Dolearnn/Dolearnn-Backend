@@ -1,5 +1,15 @@
 import { TeacherGender } from '@prisma/client';
 import { z } from 'zod';
+import { sessionPrice } from '../../../lib/pricing';
+
+// A tutor's pay per session (stored as hourlyRate). It cannot exceed what the
+// learner pays for the session.
+const tutorPaySchema = z.coerce
+  .number()
+  .min(0, 'Pay per session cannot be negative')
+  .refine((value) => value <= sessionPrice(), {
+    message: 'Pay per session cannot be more than the session price',
+  });
 
 export const listTeachersQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -19,12 +29,13 @@ export const createTeacherSchema = z.object({
   bio: z.string().trim().optional(),
   subjects: z.array(z.string().trim().min(1)).min(1, 'Add at least one subject'),
   qualifications: z.array(z.string().trim().min(1)).default([]),
-  hourlyRate: z.coerce.number().min(0, 'Hourly rate cannot be negative'),
+  // Left empty or 0: the default tutor share (50% of the session price).
+  hourlyRate: tutorPaySchema.optional(),
   defaultPassword: z.string().min(8, 'Default password must be at least 8 characters'),
 });
 
 export const updateTeacherRateSchema = z.object({
-  hourlyRate: z.coerce.number().min(0, 'Hourly rate cannot be negative'),
+  hourlyRate: tutorPaySchema,
 });
 
 export const terminateTeacherSchema = z.object({
