@@ -171,7 +171,8 @@ export async function createAdminNotifications(
       to: admin.email,
       subject: `DoLearn admin alert: ${input.title}`,
       text: `Hello ${admin.name},\n\n${input.body}\n\nSign in to the admin dashboard for more details.`,
-      html: `<p>Hello ${escapeHtml(admin.name)},</p><p>${escapeHtml(input.body)}</p><p>Sign in to the admin dashboard for more details.</p>`,
+      // Keep the body's line breaks so multi-line details stay readable.
+      html: `<p>Hello ${escapeHtml(admin.name)},</p><p>${escapeHtml(input.body).replace(/\n/g, '<br>')}</p><p>Sign in to the admin dashboard for more details.</p>`,
     })),
   ).catch((error) => {
     console.error('Could not send admin email notifications', error);

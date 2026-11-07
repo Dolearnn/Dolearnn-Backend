@@ -375,9 +375,10 @@ export async function saveStudentIntake(
   input: SaveIntakeInput,
 ) {
   assertParent(role);
-  await getOwnedStudent(userId, studentId);
+  const student = await getOwnedStudent(userId, studentId);
+  const isUpdate = Boolean(student.intake);
 
-  return prisma.intake.upsert({
+  const intake = await prisma.intake.upsert({
     where: { studentId },
     create: {
       studentId,
@@ -418,6 +419,60 @@ export async function saveStudentIntake(
         orderBy: { day: 'asc' },
       },
     },
+  });
+
+  // Tell the admin team (in-app and by email) so they can match a tutor.
+  // A failed alert must never fail the learner's request.
+  await notifyAdminsOfTutorRequest(userId, student.fullName, intake, isUpdate).catch((error) => {
+    console.error('Could not send the tutor request alert:', (error as Error).message);
+  });
+
+  return intake;
+}
+
+const readable = (value: string) =>
+  value.charAt(0) + value.slice(1).toLowerCase().replace(/_/g, ' ');
+
+async function notifyAdminsOfTutorRequest(
+  userId: string,
+  learnerName: string,
+  intake: Prisma.IntakeGetPayload<{ include: { schedule: true } }>,
+  isUpdate: boolean,
+) {
+  const account = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true, parentProfile: { select: { whatsapp: true } } },
+  });
+  const subjects = [
+    ...intake.subjects.filter((subject) => subject !== 'Other'),
+    ...(intake.subjectOther ? [intake.subjectOther] : []),
+  ];
+  const availability = intake.schedule.length
+    ? intake.schedule.map((slot) => `${readable(slot.day)} ${readable(slot.time).toLowerCase()}`).join(', ')
+    : 'not given';
+
+  const body = [
+    `${learnerName} ${isUpdate ? 'updated their' : 'sent a new'} tutor request.`,
+    '',
+    `Email: ${account?.email ?? 'unknown'}`,
+    `WhatsApp: ${account?.parentProfile?.whatsapp ?? 'not provided'}`,
+    `Subjects: ${subjects.join(', ') || intake.subject}`,
+    `Topics to work on: ${intake.specificTopics ?? 'not given'}`,
+    `Current level: ${readable(intake.currentLevel)}`,
+    `Goal: ${readable(intake.learningGoal)}`,
+    `Availability: ${availability} (${intake.timezone})`,
+    `Sessions per week: ${intake.sessionsPerWeek}`,
+    `Budget per session: ${intake.budget}`,
+    `Tutor gender preference: ${readable(intake.teacherGenderPref)}`,
+    ...(intake.specialNotes ? [`Notes: ${intake.specialNotes}`] : []),
+    '',
+    'Match a tutor on the admin Intakes page.',
+  ].join('\n');
+
+  await createAdminNotifications({
+    title: isUpdate ? `Tutor request updated: ${learnerName}` : `New tutor request: ${learnerName}`,
+    body,
+    studentId: intake.studentId,
   });
 }
 
@@ -481,7 +536,7 @@ export async function deactivateStudent(
     await createAdminNotifications(
       {
         title: 'Student paused',
-        body: `${student.fullName}'s lessons were paused by the family. Reason: ${input.reason.trim()}`,
+        body: `${student.fullName}'s lessons were paused by the learner. Reason: ${input.reason.trim()}`,
         studentId: student.id,
         teacherId: student.assignedTeacherId,
       },
@@ -494,7 +549,7 @@ export async function deactivateStudent(
           userId: student.assignedTeacher.userId,
           role: Role.TEACHER,
           title: 'Student paused lessons',
-          body: `${student.fullName}'s family paused lessons for now.`,
+          body: `${student.fullName} paused lessons for now.`,
           studentId: student.id,
           teacherId: student.assignedTeacher.id,
         },
@@ -528,7 +583,7 @@ export async function reactivateStudent(
     await createAdminNotifications(
       {
         title: 'Student reactivated',
-        body: `${student.fullName}'s family reactivated lessons.`,
+        body: `${student.fullName} reactivated lessons.`,
         studentId: student.id,
         teacherId: student.assignedTeacherId,
       },
@@ -684,7 +739,7 @@ export async function createBookingRequest(
     await createAdminNotifications(
       {
         title: 'Calendar sessions requested',
-        body: `${student.fullName}'s family requested ${input.sessionsRequested} weekly ${input.subject.trim()} session(s).`,
+        body: `${student.fullName} requested ${input.sessionsRequested} weekly ${input.subject.trim()} session(s).`,
         studentId: student.id,
       },
       tx,
@@ -815,7 +870,7 @@ export async function requestFamilySessionCancellation(
     await createAdminNotifications(
       {
         title: 'Cancellation requested',
-        body: `${session.student.fullName}'s family requested to cancel ${session.subject}. Reason: ${input.reason.trim()}`,
+        body: `${session.student.fullName} requested to cancel ${session.subject}. Reason: ${input.reason.trim()}`,
         studentId: session.studentId,
         teacherId: session.teacherId,
       },
@@ -827,7 +882,7 @@ export async function requestFamilySessionCancellation(
         userId: session.teacher.userId,
         role: Role.TEACHER,
         title: 'Cancellation requested',
-        body: `${session.student.fullName}'s family requested to cancel ${session.subject}.`,
+        body: `${session.student.fullName} requested to cancel ${session.subject}.`,
         studentId: session.studentId,
         teacherId: session.teacherId,
       },
@@ -954,7 +1009,7 @@ export async function acceptSessionProposal(
         userId: proposal.teacher.userId,
         role: Role.TEACHER,
         title: 'Session proposal accepted',
-        body: `${proposal.student.fullName}'s family accepted your ${proposal.subject} session proposal.`,
+        body: `${proposal.student.fullName} accepted your ${proposal.subject} session proposal.`,
         studentId: proposal.studentId,
         teacherId: proposal.teacherId,
       },
@@ -1032,7 +1087,7 @@ export async function declineSessionProposal(
         userId: proposal.teacher.userId,
         role: Role.TEACHER,
         title: 'Session proposal declined',
-        body: `${proposal.student.fullName}'s family declined your ${proposal.subject} session proposal. Reason: ${input.reason.trim()}.${alternativeText}`,
+        body: `${proposal.student.fullName} declined your ${proposal.subject} session proposal. Reason: ${input.reason.trim()}.${alternativeText}`,
         studentId: proposal.studentId,
         teacherId: proposal.teacherId,
       },
@@ -1042,7 +1097,7 @@ export async function declineSessionProposal(
     await createAdminNotifications(
       {
         title: 'Session proposal declined',
-        body: `${proposal.student.fullName}'s family declined ${proposal.subject} with ${proposal.teacher.user.name}. Reason: ${input.reason.trim()}.${alternativeText}`,
+        body: `${proposal.student.fullName} declined ${proposal.subject} with ${proposal.teacher.user.name}. Reason: ${input.reason.trim()}.${alternativeText}`,
         studentId: proposal.studentId,
         teacherId: proposal.teacherId,
       },
