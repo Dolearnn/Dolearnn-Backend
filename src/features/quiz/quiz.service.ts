@@ -43,6 +43,8 @@ const SUBMIT_GRACE_MS = 30_000;
 const STALE_ATTEMPT_MS = 12 * 60 * 60 * 1000;
 // How many recent attempts to look at so a retake prefers unseen questions.
 const RECENT_ATTEMPTS_FOR_VARIETY = 3;
+// How many recent attempts "Fix my mistakes" looks through.
+const MISTAKE_ATTEMPTS_LOOKED_AT = 30;
 // A topic needs this many answered questions before we call it weak.
 export const MIN_TOPIC_SAMPLE = 3;
 const WEAK_TOPIC_BELOW_PERCENT = 60;
@@ -181,8 +183,8 @@ export function subjectLabel(subjects: AttemptSubject[]) {
 /** Earlier attempts comparable with this one: same subject, or the same mix of subjects. */
 export function sameSubjectsWhere(attempt: { subjectId: string; subjectIds: string[] }) {
   return attempt.subjectIds.length > 1
-    ? { subjectIds: { equals: attempt.subjectIds } }
-    : { subjectId: attempt.subjectId, subjectIds: { isEmpty: true } };
+    ? { subjectIds: { equals: attempt.subjectIds }, isReview: false }
+    : { subjectId: attempt.subjectId, subjectIds: { isEmpty: true }, isReview: false };
 }
 
 function topicSubjectId(topic: TopicBreakdown, subjectIdByTopicId: Map<string, string>) {
@@ -255,7 +257,7 @@ function tutoringSuggestion(
 // The learner's previous submitted attempt in the same subject, so a retake can
 // show whether they improved. Served by the (userId, subjectId, startedAt) index.
 async function previousAttemptComparison(attempt: AttemptRow, scorePercent: number) {
-  if (!attempt.submittedAt) return null;
+  if (!attempt.submittedAt || attempt.isReview) return null;
 
   const previous = await prisma.quizAttempt.findFirst({
     where: {
@@ -427,7 +429,109 @@ async function retakePlan(user: QuizUser, input: StartAttemptInput) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Fix my mistakes
+// ---------------------------------------------------------------------------
+
+// Nigeria is UTC+1 all year.
+function lagosDay(date: Date) {
+  return new Date(date.getTime() + 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+/**
+ * Questions whose latest answer was wrong. They come back from the next day
+ * (a gap helps the right answer stick, and gives a reason to return):
+ * `due` can be retried now, oldest first; `tomorrow` were missed today.
+ */
+async function collectMistakes(userId: string, studentId: string | null) {
+  const attempts = await prisma.quizAttempt.findMany({
+    where: {
+      userId,
+      studentId,
+      status: QuizAttemptStatus.SUBMITTED,
+      submittedAt: { not: null },
+    },
+    orderBy: { submittedAt: 'desc' },
+    take: MISTAKE_ATTEMPTS_LOOKED_AT,
+    select: { questionIds: true, answers: true, submittedAt: true },
+  });
+
+  // Newest first, so the first answer seen for a question is its latest.
+  const latest = new Map<string, { chosen: string; at: Date }>();
+  for (const attempt of attempts) {
+    const answers = (attempt.answers ?? {}) as Record<string, string>;
+    for (const questionId of attempt.questionIds) {
+      const chosen = answers[questionId];
+      if (chosen !== undefined && !latest.has(questionId)) {
+        latest.set(questionId, { chosen, at: attempt.submittedAt! });
+      }
+    }
+  }
+  if (latest.size === 0) return { due: [], tomorrow: 0 };
+
+  const questions = await prisma.question.findMany({
+    where: { id: { in: [...latest.keys()] }, status: QuestionStatus.PUBLISHED },
+    select: { id: true, subjectId: true, correctOptionId: true },
+  });
+
+  const today = lagosDay(new Date());
+  const missed = questions
+    .filter((question) => latest.get(question.id)!.chosen !== question.correctOptionId)
+    .map((question) => ({
+      id: question.id,
+      subjectId: question.subjectId,
+      at: latest.get(question.id)!.at,
+    }));
+  const due = missed
+    .filter((question) => lagosDay(question.at) < today)
+    .sort((a, b) => a.at.getTime() - b.at.getTime());
+
+  return { due, tomorrow: missed.length - due.length };
+}
+
+async function startMistakesReview(user: QuizUser, input: StartAttemptInput) {
+  const studentId = input.studentId ? await assertOwnsStudent(user, input.studentId) : null;
+  const { due } = await collectMistakes(user.id, studentId);
+  if (due.length === 0) {
+    throw new AppError(404, 'You have no mistakes to fix right now. Well done.');
+  }
+
+  const chosen = due.slice(0, input.count);
+  const subjectIds = [...new Set(chosen.map((question) => question.subjectId))];
+  // Grouped by subject, so the quiz has the same subject sections as a mixed exam.
+  const questions = await loadQuestionsInOrder(
+    subjectIds.flatMap((subjectId) =>
+      chosen.filter((question) => question.subjectId === subjectId).map((question) => question.id),
+    ),
+    true,
+  );
+  if (questions.length === 0) {
+    throw new AppError(404, 'You have no mistakes to fix right now. Well done.');
+  }
+
+  const attempt = await prisma.quizAttempt.create({
+    data: {
+      userId: user.id,
+      studentId,
+      subjectId: subjectIds[0],
+      subjectIds: subjectIds.length > 1 ? subjectIds : [],
+      isReview: true,
+      mode: QuizMode.PRACTICE,
+      questionIds: questions.map((question) => question.id),
+      totalQuestions: questions.length,
+    },
+    include: { subject: { select: { id: true, name: true } } },
+  });
+
+  return {
+    attempt: attemptSummary(attempt, await attemptSubjects(attempt)),
+    questions: questions.map(playableQuestion),
+  };
+}
+
 export async function startAttempt(user: QuizUser, requested: StartAttemptInput) {
+  if (requested.reviewMistakes) return startMistakesReview(user, requested);
+
   const retake = requested.retakeOfAttemptId ? await retakePlan(user, requested) : null;
   const input = retake?.input ?? requested;
   const index = await getCatalogIndex();
@@ -849,6 +953,7 @@ export async function getProgress(user: QuizUser, query: ProgressQuery) {
       studentId,
       status: QuizAttemptStatus.SUBMITTED,
       scorePercent: { not: null },
+      isReview: false,
     },
     orderBy: { startedAt: 'desc' },
     take: PROGRESS_ATTEMPT_LIMIT,
@@ -1002,7 +1107,8 @@ const MISSION_QUESTION_COUNT = 10;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 type NextActionStart = {
-  subjectId: string;
+  subjectId?: string;
+  reviewMistakes?: boolean;
   topicIds?: string[];
   count: number;
   mode: QuizMode;
@@ -1010,7 +1116,7 @@ type NextActionStart = {
 
 type NextAction = {
   id: string;
-  type: 'DIAGNOSTIC' | 'PRACTISE_TOPIC' | 'TUTOR' | 'REASSESS';
+  type: 'DIAGNOSTIC' | 'FIX_MISTAKES' | 'PRACTISE_TOPIC' | 'TUTOR' | 'REASSESS';
   title: string;
   reason: string;
   start: NextActionStart | null;
@@ -1028,7 +1134,7 @@ type NextAction = {
 type ProgressResult = Awaited<ReturnType<typeof getProgress>>;
 type WeakTopicsResult = Awaited<ReturnType<typeof getWeakTopics>>;
 
-function buildNextActions(progress: ProgressResult, weak: WeakTopicsResult) {
+function buildNextActions(progress: ProgressResult, weak: WeakTopicsResult, mistakesDue: number) {
   if (progress.totalAttempts === 0) {
     return {
       actions: [
@@ -1043,6 +1149,19 @@ function buildNextActions(progress: ProgressResult, weak: WeakTopicsResult) {
         },
       ] satisfies NextAction[],
     };
+  }
+
+  const reviewActions: NextAction[] = [];
+  if (mistakesDue > 0) {
+    const count = Math.min(mistakesDue, MISSION_QUESTION_COUNT);
+    reviewActions.push({
+      id: 'fix-mistakes',
+      type: 'FIX_MISTAKES',
+      title: `Fix ${count} ${count === 1 ? 'question' : 'questions'} you got wrong`,
+      reason: 'From your earlier quizzes. Trying them again a day later helps the right answer stick.',
+      start: { reviewMistakes: true, count: MISSION_QUESTION_COUNT, mode: QuizMode.PRACTICE },
+      tutoring: null,
+    });
   }
 
   const practiceActions: NextAction[] = [];
@@ -1138,7 +1257,7 @@ function buildNextActions(progress: ProgressResult, weak: WeakTopicsResult) {
   // Preserve room for one support recommendation without allowing it to take
   // over the learning plan. The API order is also the visual priority in the
   // student experience: practise, reassess, then get human support if needed.
-  const learningActions = [...practiceActions, ...reassessmentActions];
+  const learningActions = [...reviewActions, ...practiceActions, ...reassessmentActions];
   const actions = [
     ...learningActions.slice(0, supportActions.length > 0 ? MAX_NEXT_ACTIONS - 1 : MAX_NEXT_ACTIONS),
     ...supportActions.slice(0, 1),
@@ -1148,18 +1267,19 @@ function buildNextActions(progress: ProgressResult, weak: WeakTopicsResult) {
 }
 
 export async function getNextActions(user: QuizUser, query: ProgressQuery) {
-  const [progress, weak] = await Promise.all([
+  const [progress, weak, mistakes] = await Promise.all([
     getProgress(user, query),
     getWeakTopics(user, query),
+    collectMistakes(user.id, query.studentId ?? null),
   ]);
-  return buildNextActions(progress, weak);
+  return buildNextActions(progress, weak, mistakes.due.length);
 }
 
 // One round trip for the practice home. The independent database reads run in
 // parallel, and next actions reuse the same progress and weak-topic results
 // instead of querying them a second time.
 export async function getPracticeOverview(user: QuizUser, query: ProgressQuery) {
-  const [rawCatalog, history, progress, weak, learnerProfile] = await Promise.all([
+  const [rawCatalog, history, progress, weak, learnerProfile, mistakes] = await Promise.all([
     getCatalog(),
     listAttempts(user, { limit: 6 }),
     getProgress(user, query),
@@ -1170,6 +1290,7 @@ export async function getPracticeOverview(user: QuizUser, query: ProgressQuery) 
           select: { externalExams: true, subjectIds: true },
         })
       : null,
+    collectMistakes(user.id, query.studentId ?? null),
   ]);
 
   const selectedExamNames = new Set(
@@ -1213,6 +1334,7 @@ export async function getPracticeOverview(user: QuizUser, query: ProgressQuery) 
           subjectIds: learnerProfile.subjectIds,
         }
       : null,
-    ...buildNextActions(progress, weak),
+    mistakes: { due: mistakes.due.length, tomorrow: mistakes.tomorrow },
+    ...buildNextActions(progress, weak, mistakes.due.length),
   };
 }

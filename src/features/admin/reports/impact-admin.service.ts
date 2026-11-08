@@ -113,7 +113,7 @@ async function buildImpactReport() {
       WITH s AS (
         SELECT COALESCE("studentId", "userId") AS learner, "subjectId", "scorePercent", "submittedAt"
         FROM "QuizAttempt"
-        WHERE "status" = 'SUBMITTED' AND "scorePercent" IS NOT NULL AND "submittedAt" IS NOT NULL
+        WHERE "status" = 'SUBMITTED' AND "scorePercent" IS NOT NULL AND "submittedAt" IS NOT NULL AND NOT "isReview"
       ),
       ranked AS (
         SELECT learner, "subjectId", "scorePercent",

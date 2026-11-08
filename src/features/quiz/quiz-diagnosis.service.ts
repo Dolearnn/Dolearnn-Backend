@@ -49,6 +49,7 @@ async function loadFacts(userId: string, attemptId: string): Promise<DiagnosisFa
       studentId: true,
       subjectId: true,
       subjectIds: true,
+      isReview: true,
       submittedAt: true,
       scorePercent: true,
       correctCount: true,
@@ -92,7 +93,7 @@ async function loadFacts(userId: string, attemptId: string): Promise<DiagnosisFa
     scorePercent: attempt.scorePercent ?? 0,
     correctCount: attempt.correctCount ?? 0,
     totalQuestions: attempt.totalQuestions,
-    previousScorePercent: previous?.scorePercent ?? null,
+    previousScorePercent: attempt.isReview ? null : previous?.scorePercent ?? null,
     topics: breakdown.map((topic) => {
       const total = overall.get(topic.topicId);
       return {

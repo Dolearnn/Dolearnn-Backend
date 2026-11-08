@@ -720,6 +720,9 @@ model QuizAttempt {
   // leave `subjectIds` empty.
   subjectId         String
   subjectIds        String[]          @default([])
+  // "Fix my mistakes": re-asks questions the learner got wrong. Kept out of
+  // score trends, because a set of only-hard questions is not a fair measure.
+  isReview          Boolean           @default(false)
   mode              QuizMode
   status            QuizAttemptStatus @default(IN_PROGRESS)
   // Ordered snapshot of the questions served, so grading never depends on the

@@ -21,8 +21,10 @@ export const startAttemptSchema = z.object({
   // Re-test the weak topics of this earlier (submitted) attempt. Subject,
   // exam, learner and topics then come from that attempt.
   retakeOfAttemptId: z.string().trim().min(1).optional(),
+  // Re-ask questions the learner got wrong on an earlier day.
+  reviewMistakes: z.boolean().optional(),
 })
-  .refine((input) => input.subjectId || input.subjectIds?.length || input.retakeOfAttemptId, {
+  .refine((input) => input.subjectId || input.subjectIds?.length || input.retakeOfAttemptId || input.reviewMistakes, {
     message: 'Subject is required',
     path: ['subjectId'],
   })
