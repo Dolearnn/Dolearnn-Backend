@@ -167,7 +167,7 @@ export async function getAchievements(user: RewardsUser, query: { studentId?: st
       ),
       mission(
         'reassess',
-        'Reassess a weak topic',
+        'Test a weak topic again',
         'Retake a quiz on your weak topics to see if you have improved.',
         thisWeek.filter((attempt) => attempt.retakeOf).length,
         1,
@@ -178,7 +178,7 @@ export async function getAchievements(user: RewardsUser, query: { studentId?: st
     missions.push(
       mission(
         'diagnose',
-        'Take a diagnostic quiz',
+        'Take a quiz',
         'Finish a quiz so we can find the topics to work on.',
         thisWeek.length,
         1,

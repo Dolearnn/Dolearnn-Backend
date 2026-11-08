@@ -1035,7 +1035,7 @@ function buildNextActions(progress: ProgressResult, weak: WeakTopicsResult) {
         {
           id: 'diagnostic',
           type: 'DIAGNOSTIC',
-          title: 'Take a diagnostic quiz',
+          title: 'Take your first quiz',
           reason:
             'Pick a subject and answer a few questions. The results show which topics need work first.',
           start: null,
@@ -1096,7 +1096,7 @@ function buildNextActions(progress: ProgressResult, weak: WeakTopicsResult) {
         id: `practise-${topic.topicId}`,
         type: 'PRACTISE_TOPIC',
         title: `Practise ${topic.name}`,
-        reason: `${topic.subject.name}: you got ${topic.correct} of ${topic.attempted} right (${topic.accuracyPercent}%). A ${MISSION_QUESTION_COUNT}-question mission on just this topic.`,
+        reason: `${topic.subject.name}: you got ${topic.correct} of ${topic.attempted} right (${topic.accuracyPercent}%). ${MISSION_QUESTION_COUNT} questions on just this topic.`,
         start: {
           subjectId: topic.subject.id,
           topicIds: [topic.topicId],
@@ -1124,7 +1124,7 @@ function buildNextActions(progress: ProgressResult, weak: WeakTopicsResult) {
     reassessmentActions.push({
       id: `reassess-${subject.subject.id}`,
       type: 'REASSESS',
-      title: `Reassess ${subject.subject.name}`,
+      title: `Test yourself again in ${subject.subject.name}`,
       reason,
       start: {
         subjectId: subject.subject.id,

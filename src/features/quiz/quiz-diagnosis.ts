@@ -71,7 +71,7 @@ export function platformNextStep(facts: DiagnosisFacts) {
   if (weak.length > 0) {
     return `Practise ${join(
       weak.slice(0, 2).map((topic) => topic.name),
-    )} with a 10-question mission, then retake this quiz to check your progress.`;
+    )} with a 10-question quiz, then retake this quiz to check your progress.`;
   }
 
   return 'Retake this subject in about a week to check that your score holds, or try a timed mock.';
