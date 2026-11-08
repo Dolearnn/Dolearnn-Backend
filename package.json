@@ -12,6 +12,7 @@
     "smoke": "node scripts/smoke-test.js",
     "seed": "node scripts/seed.js",
     "seed:bank": "node scripts/seed-bank.js",
+    "seed:daily": "node scripts/seed-daily.js",
     "reset-data": "node scripts/reset-data.js",
     "add-indexes": "node scripts/add-indexes.js",
     "prisma:generate": "prisma generate",

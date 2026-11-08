@@ -107,7 +107,7 @@ export function streaksFor(activeDays: string[], today: string) {
 }
 
 // "Zara Okafor" -> "Zara O." so the leaderboard never shows full names.
-function publicName(fullName: string | null) {
+export function publicName(fullName: string | null) {
   const parts = (fullName ?? '').trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return 'Learner';
   if (parts.length === 1) return parts[0];

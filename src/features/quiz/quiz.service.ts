@@ -807,7 +807,7 @@ export async function submitAttempt(
 
 export async function listAttempts(user: QuizUser, query: ListAttemptsQuery) {
   const rows = await prisma.quizAttempt.findMany({
-    where: { userId: user.id, status: { not: QuizAttemptStatus.EXPIRED } },
+    where: { userId: user.id, status: { not: QuizAttemptStatus.EXPIRED }, isDaily: false },
     orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
     take: query.limit + 1,
     ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),

@@ -63,6 +63,11 @@ export async function requireAuth(
   }
 }
 
+/** Recognises a signed-in user if there is one; visitors carry on as guests. */
+export function optionalAuth(req: Request, res: Response, next: NextFunction) {
+  void requireAuth(req, res, () => next());
+}
+
 export function requireRole(...roles: Role[]) {
   return (req: Request, _res: Response, next: NextFunction) => {
     if (!req.user) {

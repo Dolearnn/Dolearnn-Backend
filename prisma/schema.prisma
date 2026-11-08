@@ -223,6 +223,7 @@ model User {
   notifications   Notification[]
   auditLogs       AuditLog[]
   quizAttempts    QuizAttempt[]
+  dailyEntries    DailyEntry[]
   topicStats      UserTopicStat[]
   arenaChallenges ArenaChallenge[]
   arenaEntries    ArenaEntry[]
@@ -448,6 +449,75 @@ model TeacherAdminHours {
   updatedAt DateTime @updatedAt
 
   teacher TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+}
+
+// A learner flagged a question. kind is "bank" (Question) or "daily" (DailyQuestion).
+model QuestionReport {
+  id         String    @id @default(cuid())
+  kind       String
+  questionId String
+  // Null for visitors playing without an account.
+  userId     String?
+  reason     String
+  note       String?
+  status     String    @default("OPEN")
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+
+  @@index([status, createdAt])
+  @@index([kind, questionId])
+}
+
+// The Daily quiz has its own questions, so Practice cannot give the answers away.
+model DailyQuestion {
+  id              String   @id @default(cuid())
+  sourceKey       String   @unique
+  // english, maths or history
+  category        String
+  text            String
+  options         Json
+  correctOptionId String
+  explanation     String?
+  // The day it last appeared, "YYYY-MM-DD".
+  usedOn          String?
+  createdAt       DateTime @default(now())
+
+  @@index([category, usedOn])
+}
+
+model DailyQuiz {
+  id          String   @id @default(cuid())
+  // Nigerian date, "YYYY-MM-DD".
+  day         String   @unique
+  number      Int
+  questionIds String[]
+  createdAt   DateTime @default(now())
+
+  entries DailyEntry[]
+}
+
+// One person's single attempt at a day's quiz. Guests have a guestKey until they sign up.
+model DailyEntry {
+  id                String    @id @default(cuid())
+  dailyQuizId       String
+  userId            String?
+  guestKey          String?
+  answers           Json      @default("{}")
+  questionIndex     Int       @default(0)
+  questionStartedAt DateTime
+  correctCount      Int       @default(0)
+  totalMs           Int       @default(0)
+  // Too fast to be believable: kept off the leaderboard.
+  flagged           Boolean   @default(false)
+  startedAt         DateTime  @default(now())
+  finishedAt        DateTime?
+
+  quiz DailyQuiz @relation(fields: [dailyQuizId], references: [id], onDelete: Cascade)
+  user User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([dailyQuizId, userId])
+  @@unique([dailyQuizId, guestKey])
+  @@index([userId])
 }
 
 model SessionProposal {
@@ -742,6 +812,8 @@ model QuizAttempt {
   // "Fix my mistakes": re-asks questions the learner got wrong. Kept out of
   // score trends, because a set of only-hard questions is not a fair measure.
   isReview          Boolean           @default(false)
+  // The Daily's score: counted for streaks and XP, hidden from Practice history.
+  isDaily           Boolean           @default(false)
   mode              QuizMode
   status            QuizAttemptStatus @default(IN_PROGRESS)
   // Ordered snapshot of the questions served, so grading never depends on the
