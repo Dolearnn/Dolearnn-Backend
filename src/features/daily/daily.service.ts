@@ -11,7 +11,7 @@ import { lagosToday, lagosWeekStart, publicName } from '../quiz/quiz-rewards.ser
  */
 type Category = 'english' | 'maths' | 'history';
 
-const PLAN: Record<Category, number> = { english: 5, maths: 3, history: 2 };
+export const PLAN: Record<Category, number> = { english: 5, maths: 3, history: 2 };
 const SECONDS: Record<Category, number> = { english: 20, maths: 40, history: 20 };
 // Slow connections: an answer this soon after the limit still counts.
 const GRACE_MS = 3000;
