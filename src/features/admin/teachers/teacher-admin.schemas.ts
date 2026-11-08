@@ -1,3 +1,4 @@
+import { DayOfWeek, TimeBlock } from '@prisma/client';
 import { TeacherGender } from '@prisma/client';
 import { z } from 'zod';
 import { sessionPrice } from '../../../lib/pricing';
@@ -50,3 +51,7 @@ export type CreateTeacherInput = z.infer<typeof createTeacherSchema>;
 export type ListTeachersQueryInput = z.infer<typeof listTeachersQuerySchema>;
 export type UpdateTeacherRateInput = z.infer<typeof updateTeacherRateSchema>;
 export type TerminateTeacherInput = z.infer<typeof terminateTeacherSchema>;
+
+export const teacherHoursSchema = z.object({
+  hours: z.array(z.object({ day: z.nativeEnum(DayOfWeek), time: z.nativeEnum(TimeBlock) })).max(21),
+});

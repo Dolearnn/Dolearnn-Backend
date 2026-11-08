@@ -2,6 +2,7 @@ import { createApp } from './app';
 import { env } from './config/env';
 import { startAttendanceAutoConfirm } from './features/sessions/attendance-auto-confirm';
 import { startReminderEmails } from './features/reminders/reminders.service';
+import { startLessonReminders } from './features/reminders/lesson-reminders';
 import { describeEmailConfig } from './lib/email';
 import { prisma } from './lib/prisma';
 
@@ -20,6 +21,7 @@ const server = app.listen(env.PORT, () => {
   console.log(describeEmailConfig());
   startAttendanceAutoConfirm();
   startReminderEmails();
+  startLessonReminders();
 });
 
 server.on('error', (error: NodeJS.ErrnoException) => {

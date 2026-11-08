@@ -144,6 +144,45 @@ export async function listBookingRequests() {
   });
 }
 
+const DAY_BY_INDEX = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'] as const;
+
+function firstLessonFor(startsAt: Date, timeZone: string) {
+  return startsAt.toLocaleString('en-GB', {
+    timeZone,
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+export async function declineBookingRequest(requestId: string, reason: string) {
+  const request = await prisma.sessionBookingRequest.findUnique({
+    where: { id: requestId },
+    include: { parent: { include: { user: true } } },
+  });
+  if (!request) throw new AppError(404, 'Booking request not found');
+  if (request.status !== BookingRequestStatus.PENDING) {
+    throw new AppError(400, 'This booking request has already been resolved');
+  }
+
+  const updated = await prisma.sessionBookingRequest.update({
+    where: { id: requestId },
+    data: { status: BookingRequestStatus.CANCELLED, declineReason: reason },
+  });
+  await createNotifications([
+    {
+      userId: request.parent.userId,
+      role: request.parent.user.role,
+      title: 'Lesson request declined',
+      body: `Your ${request.subject} lesson request was not approved. Reason: ${reason}`,
+      studentId: request.studentId,
+    },
+  ]);
+  return updated;
+}
+
 function dateWithTime(date: Date, time: string, timeZone: string) {
   const [hours, minutes] = time.split(':').map(Number);
   return zonedLocalDateTimeToUtc(
@@ -206,7 +245,7 @@ async function consumePaidSessions(
 
 export async function scheduleBookingRequest(
   requestId: string,
-  input?: ScheduleBookingRequestInput,
+  input: ScheduleBookingRequestInput,
 ) {
   return prisma.$transaction(async (tx) => {
     const request = await tx.sessionBookingRequest.findUnique({
@@ -247,18 +286,18 @@ export async function scheduleBookingRequest(
       throw new AppError(400, 'This subject has no assigned teacher yet');
     }
 
-    const meetLink = input?.meetLink?.trim() || assignment.meetLink;
-    if (input?.meetLink?.trim()) {
-      await tx.studentSubjectAssignment.update({
-        where: {
-          studentId_subject: {
-            studentId: assignment.studentId,
-            subject: request.subject,
-          },
+    const meetLink = input.meetLink.trim();
+    const firstDate = input.startDate ? new Date(`${input.startDate}T00:00:00Z`) : request.startDate;
+    const startTime = input.startTime ?? request.startTime;
+    await tx.studentSubjectAssignment.update({
+      where: {
+        studentId_subject: {
+          studentId: assignment.studentId,
+          subject: request.subject,
         },
-        data: { meetLink },
-      });
-    }
+      },
+      data: { meetLink },
+    });
 
     const packageIds = await consumePaidSessions(
       request.parentId,
@@ -270,9 +309,9 @@ export async function scheduleBookingRequest(
 
     const sessions = [];
     for (let index = 0; index < request.sessionsRequested; index += 1) {
-      const date = new Date(request.startDate);
+      const date = new Date(firstDate);
       date.setUTCDate(date.getUTCDate() + index * 7);
-      const startsAt = dateWithTime(date, request.startTime, request.timezone);
+      const startsAt = dateWithTime(date, startTime, request.timezone);
 
       await assertTeacherHasNoSchedulingConflict(
         tx,
@@ -310,6 +349,9 @@ export async function scheduleBookingRequest(
       data: {
         status: BookingRequestStatus.SCHEDULED,
         scheduledAt: new Date(),
+        startDate: firstDate,
+        startTime,
+        day: DAY_BY_INDEX[firstDate.getUTCDay()],
       },
     });
 
@@ -319,7 +361,7 @@ export async function scheduleBookingRequest(
           userId: request.parent.userId,
           role: Role.PARENT,
           title: 'Sessions scheduled',
-          body: `Admin scheduled ${request.sessionsRequested} ${request.subject} session(s) for ${request.student.fullName}.`,
+          body: `Admin scheduled ${request.sessionsRequested} ${request.subject} session(s) for ${request.student.fullName}. First lesson: ${firstLessonFor(sessions[0].startsAt, request.timezone)}. The meeting link is on your Sessions page.`,
           studentId: request.studentId,
           teacherId: assignment.teacherId,
         },
@@ -327,25 +369,13 @@ export async function scheduleBookingRequest(
           userId: assignment.teacher.userId,
           role: Role.TEACHER,
           title: 'Sessions scheduled',
-          body: `Admin scheduled ${request.sessionsRequested} ${request.subject} session(s) with ${request.student.fullName}.`,
+          body: `Admin scheduled ${request.sessionsRequested} ${request.subject} session(s) with ${request.student.fullName}. First lesson: ${firstLessonFor(sessions[0].startsAt, assignment.teacher.timezone)}.`,
           studentId: request.studentId,
           teacherId: assignment.teacherId,
         },
       ],
       tx,
     );
-
-    if (!meetLink) {
-      await createAdminNotifications(
-        {
-          title: 'Meeting link needed',
-          body: `${request.student.fullName}'s ${request.subject} sessions were scheduled without a meeting link. Add the link to the teacher-student match.`,
-          studentId: request.studentId,
-          teacherId: assignment.teacherId,
-        },
-        tx,
-      );
-    }
 
     return { request: updatedRequest, sessions };
   }, {

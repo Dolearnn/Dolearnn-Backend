@@ -6,21 +6,17 @@ import {
   createBookingRequestSchema,
   createStudentSchema,
   deactivateStudentSchema,
-  declineSessionProposalSchema,
   requestCancellationSchema,
   saveGoalSchema,
   saveIntakeSchema,
 } from './family.schemas';
 import {
-  acceptSessionProposal,
   createBookingRequest,
   deactivateStudent,
-  declineSessionProposal,
   familyProfile,
   familySessionCreditSummary,
   confirmFamilyAttendance,
   listFamilyPayments,
-  listSessionProposals,
   listFamilySessions,
   listBookingRequests,
   listStudents,
@@ -213,38 +209,3 @@ familyRoutes.post(
   }),
 );
 
-familyRoutes.get(
-  '/session-proposals',
-  asyncHandler(async (req, res) => {
-    const proposals = await listSessionProposals(req.user!.id, req.user!.role);
-    res.json({ proposals });
-  }),
-);
-
-familyRoutes.post(
-  '/session-proposals/:proposalId/accept',
-  asyncHandler(async (req, res) => {
-    const proposalId = getRouteParam(req.params.proposalId, 'proposal id');
-    const result = await acceptSessionProposal(
-      req.user!.id,
-      req.user!.role,
-      proposalId,
-    );
-    res.json(result);
-  }),
-);
-
-familyRoutes.post(
-  '/session-proposals/:proposalId/decline',
-  asyncHandler(async (req, res) => {
-    const proposalId = getRouteParam(req.params.proposalId, 'proposal id');
-    const input = declineSessionProposalSchema.parse(req.body);
-    const proposal = await declineSessionProposal(
-      req.user!.id,
-      req.user!.role,
-      proposalId,
-      input,
-    );
-    res.json({ proposal });
-  }),
-);

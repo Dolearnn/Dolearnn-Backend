@@ -5,7 +5,6 @@ import { AppError } from '../../lib/http';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import {
   createSessionNoteSchema,
-  createSessionProposalSchema,
   reportContactAttemptSchema,
   requestCancellationSchema,
   updatePayoutAccountSchema,
@@ -13,7 +12,6 @@ import {
 } from './teacher.schemas';
 import {
   confirmTeacherAttendance,
-  createSessionProposal,
   reportTeacherContactAttempt,
   requestTeacherSessionCancellation,
   submitSessionNote,
@@ -153,15 +151,3 @@ teacherRoutes.post(
   }),
 );
 
-teacherRoutes.post(
-  '/session-proposals',
-  asyncHandler(async (req, res) => {
-    const input = createSessionProposalSchema.parse(req.body);
-    const proposal = await createSessionProposal(
-      req.user!.id,
-      req.user!.role,
-      input,
-    );
-    res.status(201).json({ proposal });
-  }),
-);

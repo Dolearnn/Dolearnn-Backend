@@ -35,9 +35,15 @@ export const createAdminSessionSchema = z.object({
 export type CreateAdminSessionInput = z.infer<typeof createAdminSessionSchema>;
 
 export const scheduleBookingRequestSchema = z.object({
-  meetLink: safeMeetingLinkSchema.optional().or(
-    z.literal('').transform(() => undefined),
-  ),
+  // The admin always adds the link.
+  meetLink: safeMeetingLinkSchema,
+  // Sent only when the admin changes the time the learner asked for.
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Choose a start date').optional(),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/, 'Choose a start time').optional(),
+});
+
+export const declineBookingRequestSchema = z.object({
+  reason: z.string().trim().min(3, 'Give the learner a reason').max(500),
 });
 
 export type ScheduleBookingRequestInput = z.infer<

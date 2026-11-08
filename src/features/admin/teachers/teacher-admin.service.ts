@@ -347,3 +347,23 @@ export async function terminateTeacher(
 
   return displayTeacher(teacher);
 }
+
+/** When each teacher is usually free. Admin screens only. */
+export async function listTeacherHours() {
+  const rows = await prisma.teacherAdminHours.findMany();
+  return Object.fromEntries(rows.map((row) => [row.teacherId, row.hours]));
+}
+
+export async function saveTeacherHours(
+  teacherId: string,
+  hours: Array<{ day: string; time: string }>,
+) {
+  const teacher = await prisma.teacherProfile.findUnique({ where: { id: teacherId }, select: { id: true } });
+  if (!teacher) throw new AppError(404, 'Teacher not found');
+  await prisma.teacherAdminHours.upsert({
+    where: { teacherId },
+    create: { teacherId, hours },
+    update: { hours },
+  });
+  return hours;
+}

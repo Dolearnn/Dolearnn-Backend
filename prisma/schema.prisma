@@ -289,6 +289,7 @@ model TeacherProfile {
   subjectAssignments StudentSubjectAssignment[]
   sessions           Session[]
   proposals          SessionProposal[]
+  adminHours         TeacherAdminHours?
   notes              SessionNote[]
   payouts            TeacherPayout[]
   notifications      Notification[]             @relation("TeacherNotifications")
@@ -358,6 +359,8 @@ model SessionBookingRequest {
   startDate         DateTime
   sessionsRequested Int
   status            BookingRequestStatus @default(PENDING)
+  // Why the admin declined this request; shown to the learner.
+  declineReason     String?
   createdAt         DateTime             @default(now())
   scheduledAt       DateTime?
 
@@ -437,6 +440,16 @@ model Goal {
   @@index([studentId])
 }
 
+// When a teacher is usually free: [{ "day", "time" }]. A separate table so it can
+// only ever reach the admin screens, never learner or teacher responses.
+model TeacherAdminHours {
+  teacherId String   @id
+  hours     Json     @default("[]")
+  updatedAt DateTime @updatedAt
+
+  teacher TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+}
+
 model SessionProposal {
   id                            String         @id @default(cuid())
   studentId                     String
@@ -465,6 +478,9 @@ model SessionProposal {
 
 model Session {
   id              String        @id @default(cuid())
+  // When the lesson reminders went out, so each is only sent once.
+  reminder24SentAt DateTime?
+  reminder1SentAt  DateTime?
   studentId       String
   teacherId       String
   lessonPackageId String?

@@ -1,3 +1,5 @@
+import { listTeacherHours, saveTeacherHours } from './teacher-admin.service';
+import { teacherHoursSchema } from './teacher-admin.schemas';
 import { Router } from 'express';
 import { AppError, asyncHandler } from '../../../lib/http';
 import {
@@ -74,5 +76,20 @@ teacherAdminRoutes.post(
     const teacherId = getRouteParam(req.params.teacherId, 'teacher id');
     const teacher = await terminateTeacher(teacherId, input, req.user!);
     res.json({ teacher });
+  }),
+);
+
+teacherAdminRoutes.get(
+  '/weekly-hours/all',
+  asyncHandler(async (_req, res) => {
+    res.json({ hours: await listTeacherHours() });
+  }),
+);
+
+teacherAdminRoutes.put(
+  '/:teacherId/weekly-hours',
+  asyncHandler(async (req, res) => {
+    const { hours } = teacherHoursSchema.parse(req.body);
+    res.json({ hours: await saveTeacherHours(getRouteParam(req.params.teacherId, 'teacher id'), hours) });
   }),
 );

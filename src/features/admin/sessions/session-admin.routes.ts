@@ -1,3 +1,5 @@
+import { declineBookingRequestSchema } from './session-admin.schemas';
+import { declineBookingRequest } from './session-admin.service';
 import { Router } from 'express';
 import { AppError, asyncHandler } from '../../../lib/http';
 import {
@@ -72,7 +74,7 @@ sessionAdminRoutes.post(
   '/booking-requests/:requestId/schedule',
   asyncHandler(async (req, res) => {
     const requestId = getRouteParam(req.params.requestId, 'request id');
-    const input = scheduleBookingRequestSchema.parse(req.body ?? {});
+    const input = scheduleBookingRequestSchema.parse(req.body);
     const result = await scheduleBookingRequest(requestId, input);
     res.json(result);
   }),
@@ -101,5 +103,13 @@ sessionAdminRoutes.post(
     const requestId = getRouteParam(req.params.requestId, 'request id');
     const result = await rejectCancellationRequest(requestId, req.user!);
     res.json(result);
+  }),
+);
+
+sessionAdminRoutes.post(
+  '/booking-requests/:requestId/decline',
+  asyncHandler(async (req, res) => {
+    const { reason } = declineBookingRequestSchema.parse(req.body);
+    res.json({ request: await declineBookingRequest(String(req.params.requestId), reason) });
   }),
 );
