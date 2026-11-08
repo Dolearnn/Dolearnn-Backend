@@ -34,6 +34,11 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .optional()
     .transform((value) => value === 'true'),
+  // Streak and "questions ready" emails to learners. Off unless set to true.
+  REMINDER_EMAILS_ENABLED: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((value) => value === 'true'),
   GOOGLE_CLIENT_ID: optionalNonEmptyString,
   EMAIL_PROVIDER: z.enum(['resend', 'sendgrid', 'smtp']).optional(),
   EMAIL_FROM_EMAIL: senderEmail,

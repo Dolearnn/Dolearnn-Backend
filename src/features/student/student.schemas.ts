@@ -32,3 +32,5 @@ export const guestBaselineOnlySchema = z.object({
 
 export type UpdateLearnerProfileInput = z.infer<typeof updateLearnerProfileSchema>;
 export type GuestBaselineInput = z.infer<typeof guestBaselineOnlySchema>;
+
+export const reminderSettingSchema = z.object({ enabled: z.boolean() });

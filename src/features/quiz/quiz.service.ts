@@ -434,7 +434,7 @@ async function retakePlan(user: QuizUser, input: StartAttemptInput) {
 // ---------------------------------------------------------------------------
 
 // Nigeria is UTC+1 all year.
-function lagosDay(date: Date) {
+export function lagosDay(date: Date) {
   return new Date(date.getTime() + 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
@@ -443,7 +443,7 @@ function lagosDay(date: Date) {
  * (a gap helps the right answer stick, and gives a reason to return):
  * `due` can be retried now, oldest first; `tomorrow` were missed today.
  */
-async function collectMistakes(userId: string, studentId: string | null) {
+export async function collectMistakes(userId: string, studentId: string | null) {
   const attempts = await prisma.quizAttempt.findMany({
     where: {
       userId,

@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import { asyncHandler } from '../../lib/http';
 import { requireAuth } from '../../middleware/auth';
-import { guestBaselineOnlySchema, updateLearnerProfileSchema } from './student.schemas';
+import { guestBaselineOnlySchema, reminderSettingSchema, updateLearnerProfileSchema } from './student.schemas';
 import { getLearnerProfile, saveGuestBaseline, updateLearnerProfile } from './student.service';
+import { getReminderSetting, setReminderSetting } from '../reminders/reminders.service';
 
 export const studentRoutes = Router();
 
@@ -12,6 +13,21 @@ studentRoutes.get(
   '/me',
   asyncHandler(async (req, res) => {
     res.json({ profile: await getLearnerProfile(req.user!) });
+  }),
+);
+
+studentRoutes.get(
+  '/reminders',
+  asyncHandler(async (req, res) => {
+    res.json(await getReminderSetting(req.user!.id));
+  }),
+);
+
+studentRoutes.put(
+  '/reminders',
+  asyncHandler(async (req, res) => {
+    const { enabled } = reminderSettingSchema.parse(req.body);
+    res.json(await setReminderSetting(req.user!.id, enabled));
   }),
 );
 

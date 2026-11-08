@@ -24,7 +24,7 @@ const XP_FOR_COMPLETION = 20;
 const DAILY_XP_CAP = 500;
 const LEADERBOARD_SIZE = 10;
 // A streak survives one missed day; two missed days in a row end it.
-const STREAK_MAX_GAP_DAYS = 2;
+export const STREAK_MAX_GAP_DAYS = 2;
 
 export const LEVELS = [
   { name: 'Explorer', minXp: 0 },
