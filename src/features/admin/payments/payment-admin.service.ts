@@ -278,11 +278,11 @@ export async function createPayment(input: CreatePaymentInput, actor: AuditActor
   ]);
 
   if (!parent) {
-    throw new AppError(404, 'Parent not found');
+    throw new AppError(404, 'Learner not found');
   }
 
   if (!student) {
-    throw new AppError(404, 'Student not found for this parent');
+    throw new AppError(404, 'Learner profile not found');
   }
 
   return prisma.$transaction(async (tx) => {

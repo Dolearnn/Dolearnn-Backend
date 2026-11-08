@@ -383,7 +383,7 @@ export async function confirmTeacherAttendance(
       await createAdminNotifications(
         {
           title: 'Class attendance verified',
-          body: `${session.subject} with ${session.student.fullName} was confirmed by both family and teacher.`,
+          body: `${session.subject} with ${session.student.fullName} was confirmed by both learner and teacher.`,
           studentId: session.studentId,
           teacherId: teacher.id,
         },

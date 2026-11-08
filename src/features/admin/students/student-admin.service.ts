@@ -162,7 +162,7 @@ export async function createAdminStudent(
   });
 
   if (!parent) {
-    throw new AppError(404, 'Parent not found');
+    throw new AppError(404, 'Learner not found');
   }
 
   // A learner account has exactly one tutoring profile (its own).
@@ -324,7 +324,7 @@ export async function assignTeacherToStudent(
       preferredGender === GenderPreference.MALE ? 'male' : 'female';
     throw new AppError(
       400,
-      `${student.fullName}'s family asked for a ${prefLabel} teacher. ${teacher.user.name} does not match this preference.`,
+      `${student.fullName} asked for a ${prefLabel} teacher. ${teacher.user.name} does not match this preference.`,
     );
   }
 
@@ -335,7 +335,7 @@ export async function assignTeacherToStudent(
   ) {
     throw new AppError(
       400,
-      `${teacher.user.name} has not set their gender, which is needed to honor the family's teacher gender preference.`,
+      `${teacher.user.name} has not set their gender, which is needed to honor the learner's teacher gender preference.`,
     );
   }
 

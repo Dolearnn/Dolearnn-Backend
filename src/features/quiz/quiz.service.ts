@@ -96,7 +96,7 @@ function levelForScore(scorePercent: number): CurrentLevel {
 
 export async function assertOwnsStudent(user: QuizUser, studentId: string) {
   if (user.role !== Role.PARENT) {
-    throw new AppError(403, 'Only family accounts can quiz on behalf of a student');
+    throw new AppError(403, 'This account cannot take a quiz for that learner');
   }
 
   const student = await prisma.student.findFirst({

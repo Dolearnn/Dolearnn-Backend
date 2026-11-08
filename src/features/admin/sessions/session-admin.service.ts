@@ -652,7 +652,7 @@ export async function approveCancellationRequest(
     await createAdminNotifications(
       {
         title: 'Session request approved',
-        body: `Admin approved a ${request.requestedBy === CancellationRequester.FAMILY ? 'family cancellation' : 'teacher reschedule'} request for ${request.session.subject} with ${request.session.student.fullName}.`,
+        body: `Admin approved a ${request.requestedBy === CancellationRequester.FAMILY ? 'learner cancellation' : 'teacher reschedule'} request for ${request.session.subject} with ${request.session.student.fullName}.`,
         studentId: request.session.studentId,
         teacherId: request.session.teacherId,
       },
@@ -665,7 +665,7 @@ export async function approveCancellationRequest(
         action: AuditAction.CANCELLATION_APPROVED,
         entityType: AuditEntityType.CANCELLATION,
         entityId: cancellation.id,
-        summary: `${actor.email ?? 'Admin'} approved a ${request.requestedBy === CancellationRequester.FAMILY ? 'family cancellation' : 'teacher reschedule'} request for ${request.session.subject} with ${request.session.student.fullName}.`,
+        summary: `${actor.email ?? 'Admin'} approved a ${request.requestedBy === CancellationRequester.FAMILY ? 'learner cancellation' : 'teacher reschedule'} request for ${request.session.subject} with ${request.session.student.fullName}.`,
         studentId: request.session.studentId,
         teacherId: request.session.teacherId,
         metadata: {
@@ -717,7 +717,7 @@ export async function rejectCancellationRequest(
             userId: request.session.teacher.userId,
             role: Role.TEACHER,
             title: 'Cancellation request rejected',
-            body: `${request.session.student.fullName}'s family cancellation request was rejected. The session is still scheduled.`,
+            body: `${request.session.student.fullName}'s cancellation request was rejected. The session is still scheduled.`,
           }
         : null;
 
@@ -744,7 +744,7 @@ export async function rejectCancellationRequest(
     await createAdminNotifications(
       {
         title: 'Session request rejected',
-        body: `Admin rejected a ${request.requestedBy === CancellationRequester.FAMILY ? 'family cancellation' : 'teacher reschedule'} request for ${request.session.subject} with ${request.session.student.fullName}.`,
+        body: `Admin rejected a ${request.requestedBy === CancellationRequester.FAMILY ? 'learner cancellation' : 'teacher reschedule'} request for ${request.session.subject} with ${request.session.student.fullName}.`,
         studentId: request.session.studentId,
         teacherId: request.session.teacherId,
       },
@@ -757,7 +757,7 @@ export async function rejectCancellationRequest(
         action: AuditAction.CANCELLATION_REJECTED,
         entityType: AuditEntityType.CANCELLATION,
         entityId: updatedCancellation.id,
-        summary: `${actor.email ?? 'Admin'} rejected a ${request.requestedBy === CancellationRequester.FAMILY ? 'family cancellation' : 'teacher reschedule'} request for ${request.session.subject} with ${request.session.student.fullName}.`,
+        summary: `${actor.email ?? 'Admin'} rejected a ${request.requestedBy === CancellationRequester.FAMILY ? 'learner cancellation' : 'teacher reschedule'} request for ${request.session.subject} with ${request.session.student.fullName}.`,
         studentId: request.session.studentId,
         teacherId: request.session.teacherId,
         metadata: {
