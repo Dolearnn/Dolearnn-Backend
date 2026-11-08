@@ -241,6 +241,33 @@ export async function resendTeacherInvite(teacherId: string) {
   return { inviteSent };
 }
 
+export async function updateTeacherSubjects(teacherId: string, subjects: string[]) {
+  const existing = await prisma.teacherProfile.findUnique({ where: { id: teacherId }, select: { id: true } });
+  if (!existing) {
+    throw new AppError(404, 'Teacher not found');
+  }
+
+  // A subject can't be taken away while learners are still matched to it.
+  const wanted = new Set(subjects.map((subject) => subject.toLowerCase()));
+  const assigned = await prisma.studentSubjectAssignment.findMany({
+    where: { teacherId },
+    select: { subject: true },
+  });
+  const stillTeaching = [
+    ...new Set(assigned.map((row) => row.subject).filter((subject) => !wanted.has(subject.toLowerCase()))),
+  ];
+  if (stillTeaching.length > 0) {
+    throw new AppError(409, `Learners are still matched to this teacher for ${stillTeaching.join(', ')}. Reassign them first.`);
+  }
+
+  const teacher = await prisma.teacherProfile.update({
+    where: { id: teacherId },
+    data: { subjects: [...new Set(subjects)] },
+    include: { user: true },
+  });
+  return displayTeacher(teacher);
+}
+
 export async function updateTeacherRate(
   teacherId: string,
   input: UpdateTeacherRateInput,

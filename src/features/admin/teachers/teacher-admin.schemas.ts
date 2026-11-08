@@ -43,6 +43,10 @@ export const updateTeacherRateSchema = z.object({
   hourlyRate: tutorPaySchema,
 });
 
+export const updateTeacherSubjectsSchema = z.object({
+  subjects: z.array(z.string().trim().min(1).max(60)).min(1, 'Choose at least one subject').max(30),
+});
+
 export const terminateTeacherSchema = z.object({
   reason: z.string().trim().min(5, 'Termination reason is required'),
 });

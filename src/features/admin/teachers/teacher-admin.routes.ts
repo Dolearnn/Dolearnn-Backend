@@ -7,6 +7,7 @@ import {
   listTeachersQuerySchema,
   terminateTeacherSchema,
   updateTeacherRateSchema,
+  updateTeacherSubjectsSchema,
 } from './teacher-admin.schemas';
 import {
   createTeacher,
@@ -15,6 +16,7 @@ import {
   resendTeacherInvite,
   terminateTeacher,
   updateTeacherRate,
+  updateTeacherSubjects,
 } from './teacher-admin.service';
 
 export const teacherAdminRoutes = Router();
@@ -56,6 +58,15 @@ teacherAdminRoutes.post(
   asyncHandler(async (req, res) => {
     const teacherId = getRouteParam(req.params.teacherId, 'teacher id');
     res.json(await resendTeacherInvite(teacherId));
+  }),
+);
+
+teacherAdminRoutes.patch(
+  '/:teacherId/subjects',
+  asyncHandler(async (req, res) => {
+    const { subjects } = updateTeacherSubjectsSchema.parse(req.body);
+    const teacherId = getRouteParam(req.params.teacherId, 'teacher id');
+    res.json({ teacher: await updateTeacherSubjects(teacherId, subjects) });
   }),
 );
 
