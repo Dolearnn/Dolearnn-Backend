@@ -13,6 +13,7 @@ import {
   getQuestionPool,
   type PoolQuestion,
 } from './quiz.cache';
+import { buildExamPlan, type ExamPlanTopic } from './quiz-exam-plan';
 import {
   subjectList,
   type ListAttemptsQuery,
@@ -1275,6 +1276,45 @@ export async function getNextActions(user: QuizUser, query: ProgressQuery) {
   return buildNextActions(progress, weak, mistakes.due.length);
 }
 
+async function examPlanFor(
+  userId: string,
+  exams: Array<{ id: string }>,
+  subjects: Array<{ id: string; name: string; topics: Array<{ id: string; name: string }> }>,
+  examDate: Date | null,
+) {
+  // Only topics that really have questions for this learner's exams count.
+  const topics: ExamPlanTopic[] = [];
+  for (const subject of subjects) {
+    const pools = await Promise.all(
+      exams.map(async (exam) => ({
+        examId: exam.id,
+        topicIds: new Set((await getQuestionPool(exam.id, subject.id)).map((question) => question.topicId)),
+      })),
+    );
+    for (const topic of subject.topics) {
+      const examId = pools.find((pool) => pool.topicIds.has(topic.id))?.examId;
+      if (examId) {
+        topics.push({ topicId: topic.id, name: topic.name, subjectId: subject.id, subjectName: subject.name, examId });
+      }
+    }
+  }
+
+  const rows = await prisma.userTopicStat.findMany({
+    where: { learnerId: userId, userId },
+    select: { topicId: true, attempted: true, correct: true },
+  });
+
+  const today = Date.parse(`${lagosDay(new Date())}T00:00:00Z`);
+  const daysLeft = examDate ? Math.round((Date.parse(`${examDate.toISOString().slice(0, 10)}T00:00:00Z`) - today) / DAY_MS) : null;
+
+  return buildExamPlan({
+    topics,
+    stats: new Map(rows.map((row) => [row.topicId, row])),
+    daysLeft: daysLeft !== null && daysLeft >= 0 ? daysLeft : null,
+    coveredAfter: MIN_TOPIC_SAMPLE,
+  });
+}
+
 // One round trip for the practice home. The independent database reads run in
 // parallel, and next actions reuse the same progress and weak-topic results
 // instead of querying them a second time.
@@ -1287,7 +1327,7 @@ export async function getPracticeOverview(user: QuizUser, query: ProgressQuery) 
     user.role === Role.STUDENT
       ? prisma.learnerProfile.findUnique({
           where: { userId: user.id },
-          select: { externalExams: true, subjectIds: true },
+          select: { externalExams: true, subjectIds: true, examDate: true },
         })
       : null,
     collectMistakes(user.id, query.studentId ?? null),
@@ -1320,6 +1360,11 @@ export async function getPracticeOverview(user: QuizUser, query: ProgressQuery) 
   };
   const matchedExamNames = new Set(matchedExams.map((exam) => exam.name.trim().toLowerCase()));
 
+  const examPlan =
+    learnerProfile && matchedExams.length > 0 && selectedSubjectIds.size > 0
+      ? await examPlanFor(user.id, matchedExams, visibleSubjects, learnerProfile.examDate)
+      : null;
+
   return {
     catalog,
     history,
@@ -1335,6 +1380,7 @@ export async function getPracticeOverview(user: QuizUser, query: ProgressQuery) 
         }
       : null,
     mistakes: { due: mistakes.due.length, tomorrow: mistakes.tomorrow },
+    examPlan,
     ...buildNextActions(progress, weak, mistakes.due.length),
   };
 }
