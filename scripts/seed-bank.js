@@ -31,7 +31,8 @@ function loadSubjectFiles() {
     .readdirSync(SUBJECTS_DIR)
     .filter((file) => file.endsWith('.js'))
     .sort()
-    .map((file) => ({ file, ...require(path.join(SUBJECTS_DIR, file)) }));
+    // A file holds one subject, or an array of them for a batch across subjects.
+    .flatMap((file) => [require(path.join(SUBJECTS_DIR, file))].flat().map((subject) => ({ file, ...subject })));
 }
 
 async function main() {
