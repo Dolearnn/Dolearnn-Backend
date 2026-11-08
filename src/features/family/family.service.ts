@@ -73,7 +73,7 @@ async function ensureLearnerAccount(userId: string) {
     where: { id: userId },
     include: { learnerProfile: true },
   });
-  if (!user || user.role !== Role.STUDENT) return null;
+  if (!user || (user.role !== Role.STUDENT && user.role !== Role.PARENT)) return null;
 
   return prisma.$transaction(async (tx) => {
     const parent = await tx.parentProfile.upsert({
@@ -113,7 +113,7 @@ async function getParentProfile(userId: string) {
   }
 
   // A learner whose account predates the automatic tutoring profile.
-  if (parent.user.role === Role.STUDENT) {
+  if (parent.user.role === Role.STUDENT || parent.user.role === Role.PARENT) {
     const hasProfile = await prisma.student.count({ where: { parentId: parent.id } });
     if (hasProfile === 0) await ensureLearnerAccount(userId);
   }

@@ -1324,7 +1324,7 @@ export async function getPracticeOverview(user: QuizUser, query: ProgressQuery) 
     listAttempts(user, { limit: 6 }),
     getProgress(user, query),
     getWeakTopics(user, query),
-    user.role === Role.STUDENT
+    user.role === Role.STUDENT || user.role === Role.PARENT
       ? prisma.learnerProfile.findUnique({
           where: { userId: user.id },
           select: { externalExams: true, subjectIds: true, examDate: true },

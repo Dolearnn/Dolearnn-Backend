@@ -11,7 +11,8 @@ function jsonValue(value: NonNullable<UpdateLearnerProfileInput['guestBaseline']
 }
 
 function assertStudent(user: StudentUser) {
-  if (user.role !== Role.STUDENT) {
+  // Accounts created before the single learner account are marked PARENT.
+  if (user.role !== Role.STUDENT && user.role !== Role.PARENT) {
     throw new AppError(403, 'This area is for learner accounts');
   }
 }

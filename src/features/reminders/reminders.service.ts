@@ -192,7 +192,7 @@ export async function sendDueReminders({ now = new Date(), dryRun = false } = {}
 
   const learners = await prisma.user.findMany({
     where: {
-      role: Role.STUDENT,
+      role: { in: [Role.STUDENT, Role.PARENT] },
       status: AccountStatus.ACTIVE,
       emailRemindersOff: false,
       OR: [{ lastReminderAt: null }, { lastReminderAt: { lt: startOfToday } }],
