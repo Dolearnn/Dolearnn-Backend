@@ -1,7 +1,7 @@
 import { Router, type Request } from 'express';
 import { Role } from '@prisma/client';
 import { z } from 'zod';
-import { asyncHandler } from '../../lib/http';
+import { AppError, asyncHandler } from '../../lib/http';
 import { optionalAuth, requireAuth } from '../../middleware/auth';
 import { rateLimit } from '../../middleware/rate-limit';
 import {
@@ -9,6 +9,7 @@ import {
   claimGuestEntry,
   getDailyLeaderboard,
   getDailyState,
+  setDailyNickname,
   startDaily,
   type DailyIdentity,
 } from './daily.service';
@@ -77,5 +78,23 @@ dailyRoutes.get(
   optionalAuth,
   asyncHandler(async (req, res) => {
     res.json(await getDailyLeaderboard(identityOf(req, undefined).userId));
+  }),
+);
+
+dailyRoutes.put(
+  '/nickname',
+  requireAuth,
+  rateLimit({
+    keyPrefix: 'daily-nickname',
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    message: 'Too many tries. Please wait a few minutes.',
+    keyGenerator: (req) => req.user?.id ?? 'anonymous',
+  }),
+  asyncHandler(async (req, res) => {
+    const { userId } = identityOf(req, undefined);
+    if (!userId) throw new AppError(403, 'Only learner accounts have a nickname');
+    const { nickname } = z.object({ nickname: z.string().max(100) }).parse(req.body);
+    res.json(await setDailyNickname(userId, nickname));
   }),
 );

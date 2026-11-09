@@ -205,6 +205,9 @@ model User {
   googleId           String?       @unique
   authProvider       AuthProvider  @default(EMAIL)
   name               String
+  // Shown on the Daily leaderboard instead of the real name. Unique ignoring
+  // capitals, through an index on lower("nickname") in prisma/daily-nickname.sql.
+  nickname           String?
   role               Role
   status             AccountStatus @default(ACTIVE)
   // Show as "Hidden learner" on the weekly leaderboard (still ranked).

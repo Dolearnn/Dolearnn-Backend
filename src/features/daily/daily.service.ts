@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { Prisma, QuizAttemptStatus, QuizMode, type DailyEntry, type DailyQuiz } from '@prisma/client';
 import { AppError } from '../../lib/http';
 import { prisma } from '../../lib/prisma';
-import { lagosToday, lagosWeekStart, publicName } from '../quiz/quiz-rewards.service';
+import { lagosToday, lagosWeekStart } from '../quiz/quiz-rewards.service';
 
 /*
  * The DoLearnn Daily: one short quiz, the same for everyone, new each day at
@@ -326,7 +326,7 @@ export async function claimGuestEntry(userId: string, guestKey: string) {
 
 type BoardRow = {
   userId: string;
-  name: string | null;
+  nickname: string | null;
   hidden: boolean;
   score: number;
   ms: number;
@@ -335,17 +335,22 @@ type BoardRow = {
   players: bigint;
 };
 
+// Until a learner picks a nickname: never their real name, and still distinct.
+function placeholderNickname(userId: string) {
+  return `Learner ${userId.slice(-4).toUpperCase()}`;
+}
+
 async function board(from: string, to: string, userId: string | null, top: number) {
   const rows = await prisma.$queryRaw<BoardRow[]>`
     WITH totals AS (
-      SELECT e."userId", u."name", u."hideFromLeaderboard" AS hidden,
+      SELECT e."userId", u."nickname", u."hideFromLeaderboard" AS hidden,
              SUM(e."correctCount")::int AS score, SUM(e."totalMs")::int AS ms, COUNT(*)::int AS days
       FROM "DailyEntry" e
       JOIN "DailyQuiz" q ON q."id" = e."dailyQuizId"
       JOIN "User" u ON u."id" = e."userId"
       WHERE q."day" >= ${from} AND q."day" <= ${to}
         AND e."finishedAt" IS NOT NULL AND NOT e."flagged"
-      GROUP BY e."userId", u."name", u."hideFromLeaderboard"
+      GROUP BY e."userId", u."nickname", u."hideFromLeaderboard"
     ),
     ranked AS (
       SELECT *, RANK() OVER (ORDER BY score DESC, ms ASC) AS rank, COUNT(*) OVER () AS players FROM totals
@@ -354,7 +359,7 @@ async function board(from: string, to: string, userId: string | null, top: numbe
 
   const view = (row: BoardRow) => ({
     rank: Number(row.rank),
-    name: row.hidden ? 'Hidden learner' : publicName(row.name),
+    name: row.hidden ? 'Hidden learner' : (row.nickname ?? placeholderNickname(row.userId)),
     score: row.score,
     seconds: Math.round(row.ms / 1000),
     days: row.days,
@@ -376,7 +381,7 @@ export async function getDailyLeaderboard(userId: string | null) {
     board(lagosWeekStart(), today, userId, TOP),
     board(yesterday, yesterday, null, 3),
     userId
-      ? prisma.user.findUnique({ where: { id: userId }, select: { hideFromLeaderboard: true } })
+      ? prisma.user.findUnique({ where: { id: userId }, select: { hideFromLeaderboard: true, nickname: true } })
       : null,
   ]);
   return {
@@ -385,5 +390,47 @@ export async function getDailyLeaderboard(userId: string | null) {
     yesterday: previous.top,
     hidden: account?.hideFromLeaderboard ?? false,
     canHide: Boolean(account),
+    nickname: account?.nickname ?? null,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Nicknames
+// ---------------------------------------------------------------------------
+
+const compact = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+// The board is public and many players are under 18. A short list for the obvious
+// cases; the words are matched inside the nickname, so none may be part of a real name.
+const NOT_ALLOWED = ['admin', 'dolearn', 'moderator', 'hiddenlearner', 'fuck', 'shit', 'bitch', 'asshole', 'porn', 'nigger', 'nigga'];
+
+export async function setDailyNickname(userId: string, input: string) {
+  const nickname = input.trim();
+  if (!/^[A-Za-z0-9_]{3,20}$/.test(nickname)) {
+    throw new AppError(400, 'Use 3 to 20 letters, numbers or underscores, with no spaces.');
+  }
+  if (/\d{7,}/.test(nickname)) {
+    throw new AppError(400, 'A nickname cannot contain a phone number.');
+  }
+
+  const key = compact(nickname);
+  if (NOT_ALLOWED.some((word) => key.includes(word))) {
+    throw new AppError(400, 'That nickname is not allowed. Please choose another.');
+  }
+
+  const account = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+  if (!account) throw new AppError(404, 'Account not found');
+  if (key === compact(account.name)) {
+    throw new AppError(400, 'Choose a nickname that is not your full name.');
+  }
+
+  try {
+    await prisma.user.update({ where: { id: userId }, data: { nickname } });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      throw new AppError(409, 'That nickname is taken. Please choose another.');
+    }
+    throw error;
+  }
+  return { nickname };
 }
