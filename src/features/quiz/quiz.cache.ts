@@ -26,14 +26,15 @@ export type CatalogExam = {
 export type CatalogAvailability = {
   examId: string | null;
   subjectId: string;
+  topicId: string;
   questionCount: number;
 };
 
 export type Catalog = {
   exams: CatalogExam[];
   subjects: CatalogSubject[];
-  // How many published questions exist per exam/subject, so the UI can hide
-  // combinations that have nothing to practise yet.
+  // How many published questions exist per exam/subject/topic, so the UI can
+  // hide combinations that have nothing to practise yet.
   availability: CatalogAvailability[];
 };
 
@@ -71,7 +72,7 @@ async function loadCatalogIndex(): Promise<CatalogIndex> {
       },
     }),
     prisma.question.groupBy({
-      by: ['examId', 'subjectId'],
+      by: ['examId', 'subjectId', 'topicId'],
       where: { status: QuestionStatus.PUBLISHED },
       _count: { _all: true },
     }),
@@ -80,6 +81,7 @@ async function loadCatalogIndex(): Promise<CatalogIndex> {
   const availability = counts.map((row) => ({
     examId: row.examId,
     subjectId: row.subjectId,
+    topicId: row.topicId,
     questionCount: row._count._all,
   }));
 
