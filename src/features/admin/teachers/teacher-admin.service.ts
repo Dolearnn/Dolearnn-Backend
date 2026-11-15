@@ -3,8 +3,6 @@ import { randomBytes } from 'node:crypto';
 import {
   AccountStatus,
   AuthProvider,
-  AuditAction,
-  AuditEntityType,
   Prisma,
   Role,
   SessionStatus,
@@ -14,7 +12,7 @@ import {
 import { defaultTutorPay } from '../../../lib/pricing';
 import { AppError } from '../../../lib/http';
 import { prisma } from '../../../lib/prisma';
-import { createAuditLog, type AuditActor } from '../../audit/audit.service';
+import { AuditAction, AuditEntityType, createAuditLog, type AuditActor } from '../../audit/audit.service';
 import { sendTutorInvite } from './teacher-invite';
 import type {
   CreateTeacherInput,

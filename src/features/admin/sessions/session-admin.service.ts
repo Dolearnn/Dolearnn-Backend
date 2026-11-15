@@ -1,6 +1,4 @@
 import {
-  AuditAction,
-  AuditEntityType,
   BookingRequestStatus,
   CancellationRequester,
   CancellationStatus,
@@ -17,7 +15,7 @@ import {
   assertTeacherHasNoSchedulingConflict,
 } from '../../../lib/session-conflicts';
 import { zonedLocalDateTimeToUtc } from '../../../lib/timezones';
-import { createAuditLog, type AuditActor } from '../../audit/audit.service';
+import { AuditAction, AuditEntityType, createAuditLog, type AuditActor } from '../../audit/audit.service';
 import {
   createAdminNotifications,
   createNotifications,

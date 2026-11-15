@@ -1,14 +1,12 @@
 import {
   AccountStatus,
-  AuditAction,
-  AuditEntityType,
   GenderPreference,
   Prisma,
   Role,
 } from '@prisma/client';
 import { AppError } from '../../../lib/http';
 import { prisma } from '../../../lib/prisma';
-import { createAuditLog, type AuditActor } from '../../audit/audit.service';
+import { AuditAction, AuditEntityType, createAuditLog, type AuditActor } from '../../audit/audit.service';
 import { createNotifications } from '../../notifications/notification.service';
 import type { AssignTeacherInput } from './student-admin.schemas';
 import type { CreateAdminStudentInput } from './student-admin.schemas';

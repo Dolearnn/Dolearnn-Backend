@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { activityRoutes } from '../features/activity/activity.routes';
 import { adminRoutes } from '../features/admin/admin.routes';
 import { arenaRoutes } from '../features/arena/arena.routes';
 import { authRoutes } from '../features/auth/auth.routes';
@@ -15,6 +16,7 @@ import { healthRoutes } from './health.routes';
 
 export const routes = Router();
 
+routes.use('/activity', activityRoutes);
 routes.use('/admin', adminRoutes);
 routes.use('/arena', arenaRoutes);
 routes.use('/auth', authRoutes);

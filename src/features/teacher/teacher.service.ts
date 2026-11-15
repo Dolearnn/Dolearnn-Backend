@@ -1,7 +1,5 @@
 import {
   AccountStatus,
-  AuditAction,
-  AuditEntityType,
   CancellationRequester,
   CancellationStatus,
   DayOfWeek,
@@ -15,7 +13,7 @@ import {
   assertStudentHasNoSchedulingConflict,
   assertTeacherHasNoSchedulingConflict,
 } from '../../lib/session-conflicts';
-import { createAuditLog, type AuditActor } from '../audit/audit.service';
+import { AuditAction, AuditEntityType, createAuditLog, type AuditActor } from '../audit/audit.service';
 import { learningSummaries } from './teacher-insights';
 import {
   createAdminNotifications,

@@ -175,29 +175,6 @@ enum QuizAttemptStatus {
   EXPIRED
 }
 
-enum AuditAction {
-  STUDENT_CREATED
-  PAYMENT_RECORDED
-  PAYOUT_MARKED_PAID
-  MEETING_LINK_UPDATED
-  CANCELLATION_APPROVED
-  CANCELLATION_REJECTED
-  TEACHER_RATE_UPDATED
-  TEACHER_TERMINATED
-  FAMILY_ATTENDANCE_CONFIRMED
-  TEACHER_ATTENDANCE_CONFIRMED
-}
-
-enum AuditEntityType {
-  STUDENT
-  PAYMENT
-  PAYOUT
-  SESSION
-  CANCELLATION
-  TEACHER
-  ATTENDANCE
-}
-
 model User {
   id                 String        @id @default(cuid())
   email              String        @unique
@@ -928,22 +905,32 @@ model ArenaEntry {
 }
 
 model AuditLog {
-  id          String          @id @default(cuid())
-  actorUserId String
-  actorRole   Role
-  action      AuditAction
-  entityType  AuditEntityType
+  id          String   @id @default(cuid())
+  // Null for a visitor who is not signed in (e.g. a failed sign-in to an unknown email).
+  actorUserId String?
+  actorRole   Role?
+  // What happened, e.g. QUIZ_SUBMITTED. Plain text so new actions need no migration.
+  action      String
+  entityType  String
   entityId    String
+  // Area of the platform: AUTH, ACCOUNT, PRACTICE, ARENA, DAILY, TUTORING, ...
+  category    String   @default("ADMIN")
+  // SUCCESS or FAILED (the request was refused or errored).
+  outcome     String   @default("SUCCESS")
   summary     String
   metadata    Json?
+  ipAddress   String?
+  userAgent   String?
   studentId   String?
   teacherId   String?
-  createdAt   DateTime        @default(now())
+  createdAt   DateTime @default(now())
 
-  actor   User            @relation(fields: [actorUserId], references: [id], onDelete: Cascade)
+  actor   User?           @relation(fields: [actorUserId], references: [id], onDelete: Cascade)
   student Student?        @relation(fields: [studentId], references: [id], onDelete: SetNull)
   teacher TeacherProfile? @relation("TeacherAuditLogs", fields: [teacherId], references: [id], onDelete: SetNull)
 
+  @@index([createdAt])
+  @@index([category, createdAt])
   @@index([actorUserId, createdAt])
   @@index([action, createdAt])
   @@index([entityType, entityId, createdAt])

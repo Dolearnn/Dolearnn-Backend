@@ -1,6 +1,6 @@
-import { AuditAction, AuditEntityType, CancellationStatus, Role, SessionStatus } from '@prisma/client';
+import { CancellationStatus, Role, SessionStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
-import { createAuditLog } from '../audit/audit.service';
+import { AuditAction, AuditEntityType, createAuditLog } from '../audit/audit.service';
 import { createAdminNotifications, createNotification } from '../notifications/notification.service';
 
 /*

@@ -7,6 +7,7 @@ import { env } from './config/env';
 import { setupSwagger } from './docs/swagger';
 import { AppError } from './lib/http';
 import { errorHandler, notFoundHandler } from './middleware/error';
+import { activityLog } from './middleware/activity-log';
 import { routes } from './routes';
 
 function isLocalDevOrigin(origin: string) {
@@ -65,7 +66,7 @@ export function createApp() {
     })
   })
   setupSwagger(app);
-  app.use('/api', routes);
+  app.use('/api', activityLog, routes);
   app.use(notFoundHandler);
   app.use(errorHandler);
 

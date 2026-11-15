@@ -1,6 +1,4 @@
 import {
-  AuditAction,
-  AuditEntityType,
   LessonPackageStatus,
   Prisma,
   PayoutStatus,
@@ -8,7 +6,7 @@ import {
 } from '@prisma/client';
 import { AppError } from '../../../lib/http';
 import { prisma } from '../../../lib/prisma';
-import { createAuditLog, type AuditActor } from '../../audit/audit.service';
+import { AuditAction, AuditEntityType, createAuditLog, type AuditActor } from '../../audit/audit.service';
 import {
   createNotification,
   createNotifications,
