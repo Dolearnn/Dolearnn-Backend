@@ -60,10 +60,9 @@ const envSchema = z.object({
   TUTORING_SESSION_PRICE: z.coerce.number().positive().default(10000),
   // AI features stay switched off until a key is set.
   ANTHROPIC_API_KEY: optionalNonEmptyString,
-  // Which Claude model writes explanations. Explanations are generated once per
-  // question and reused, so the strongest model stays cheap; pick a smaller one
-  // (for example claude-sonnet-5) here if that ever changes.
-  AI_MODEL: z.string().min(1).default('claude-opus-5'),
+  // Which Claude model writes explanations and quiz diagnoses. Both are
+  // generated once and reused. Set claude-opus-5-5 here for the strongest model.
+  AI_MODEL: z.string().min(1).default('claude-sonnet-5-5'),
 });
 
 export const env = envSchema.parse(process.env);

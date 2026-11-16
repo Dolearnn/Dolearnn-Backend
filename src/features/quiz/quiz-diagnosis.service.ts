@@ -114,11 +114,14 @@ async function loadFacts(userId: string, attemptId: string): Promise<DiagnosisFa
 // rules-based summary.
 async function writeWithAi(facts: DiagnosisFacts, attemptId: string): Promise<string | null> {
   try {
-    const response = await getClient().messages.create({
+    const response = await getClient().beta.messages.create({
       model: env.AI_MODEL,
       max_tokens: 2048,
       // A short summary of facts we hand over: no need for deep reasoning.
       output_config: { effort: 'low' },
+      // If a safety filter wrongly declines, retry on a fallback model.
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
       system: DIAGNOSIS_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: buildDiagnosisPrompt(facts) }],
     });

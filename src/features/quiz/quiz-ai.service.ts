@@ -63,12 +63,16 @@ async function generateExplanation(question: {
     .filter((line, index, all) => line !== '' || all[index - 1] !== '')
     .join('\n');
 
-  let response: Anthropic.Message;
+  let response: Anthropic.Beta.BetaMessage;
   try {
-    response = await getClient().messages.create({
+    response = await getClient().beta.messages.create({
       model: env.AI_MODEL,
       max_tokens: 4096,
       output_config: { effort: 'medium' },
+      // If a safety filter wrongly declines a question, the API retries it on a
+      // fallback model instead of failing.
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: prompt }],
     });
