@@ -15,6 +15,10 @@
  *
  *   node scripts/seed-bank.js            # questions go live immediately
  *   node scripts/seed-bank.js --draft    # import as DRAFT, publish after review
+ *
+ * A subject file can also set `draft: true` (e.g. a language or religion batch
+ * awaiting a subject teacher's check): its new questions always import as DRAFT
+ * and are published from admin > Question bank after review.
  */
 require('dotenv').config();
 const fs = require('fs');
@@ -59,6 +63,8 @@ async function main() {
   }
 
   let inserted = 0;
+  // New questions from `draft: true` files, waiting for review.
+  let drafted = 0;
   let received = 0;
   for (const subject of files) {
     const subjectRow = await prisma.subject.upsert({
@@ -103,13 +109,14 @@ async function main() {
         options: options.map((optionText, i) => ({ id: OPTION_IDS[i], text: optionText })),
         correctOptionId: OPTION_IDS[correctIndex],
         explanation,
-        status,
+        status: subject.draft ? QuestionStatus.DRAFT : status,
       })),
     );
     const skippedTwins = rows.length * subject.exams.length - data.length;
 
     const result = await prisma.question.createMany({ data, skipDuplicates: true });
     inserted += result.count;
+    if (subject.draft) drafted += result.count;
     received += data.length;
     console.log(
       `  ${subject.file} -> ${subject.name} [${subject.exams.join(', ')}]: ${result.count} new / ${data.length - result.count} already present` +
@@ -118,6 +125,7 @@ async function main() {
   }
 
   console.log(`\nQuestion bank seed complete: ${inserted} inserted, ${received - inserted} skipped (${status}).`);
+  if (drafted > 0) console.log(`${drafted} of them are drafts: review and publish them in admin > Question bank.`);
   console.log('Servers cache the catalog for up to 5 minutes, so new content can take that long to appear.');
 }
 
