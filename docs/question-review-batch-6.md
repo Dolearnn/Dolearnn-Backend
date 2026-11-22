@@ -1,6 +1,6 @@
 # Question review: Yoruba and IRS (batch 6)
 
-These questions were published on 22 Nov 2026 **before** a subject teacher had checked them. A Yoruba teacher and an IRS teacher should still go through the items below. To correct a question, edit it in **Admin > Question bank**. To hide a whole batch again while it is checked:
+**Status: reviewed.** Published on 22 Nov 2026; a Yoruba teacher and an IRS teacher have since checked them (confirmed by the team). The list below is kept as a record of what was flagged. To correct a question, edit it in **Admin > Question bank**. To hide a whole batch again:
 
     npm run publish:bank -- batch-6-yoruba batch-6-irs --unpublish
 
