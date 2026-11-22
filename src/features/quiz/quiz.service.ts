@@ -16,6 +16,10 @@ import {
 import { buildExamPlan, type ExamPlanTopic } from './quiz-exam-plan';
 import {
   subjectList,
+  UTME_ENGLISH_QUESTIONS,
+  UTME_ENGLISH_SLUG,
+  UTME_SECONDS,
+  UTME_SUBJECT_QUESTIONS,
   type ListAttemptsQuery,
   type ProgressQuery,
   type StartAttemptInput,
@@ -547,6 +551,11 @@ export async function startAttempt(user: QuizUser, requested: StartAttemptInput)
     throw new AppError(404, 'Exam not found');
   }
 
+  const utme = input.utme === true;
+  if (utme && !subjects.some((subject) => subject!.slug === UTME_ENGLISH_SLUG)) {
+    throw new AppError(400, 'A full UTME paper must include Use of English');
+  }
+
   // Topics may come from any chosen subject. A subject with none picked keeps
   // all of its topics.
   const topicIds = new Set(input.topicIds ?? []);
@@ -605,7 +614,15 @@ export async function startAttempt(user: QuizUser, requested: StartAttemptInput)
   ]);
   // Share the questions evenly between subjects (a subject short of questions
   // passes its share on), then keep each subject together, like a real paper.
-  const quotas = shareQuestions(input.count, pools.map((pool) => pool.length));
+  const quotas = utme
+    ? // A full UTME paper: fixed counts per subject, fewer if a pool is short.
+      subjects.map((subject, i) =>
+        Math.min(
+          subject!.slug === UTME_ENGLISH_SLUG ? UTME_ENGLISH_QUESTIONS : UTME_SUBJECT_QUESTIONS,
+          pools[i].length,
+        ),
+      )
+    : shareQuestions(input.count, pools.map((pool) => pool.length));
   const questions = await loadQuestionsInOrder(
     pools.flatMap((pool, i) => pickQuestionIds(pool, quotas[i], seen)),
     true,
@@ -617,8 +634,12 @@ export async function startAttempt(user: QuizUser, requested: StartAttemptInput)
     throw new AppError(404, 'No questions are available for this selection yet');
   }
 
-  const isMock = input.mode === QuizMode.MOCK;
-  const timeLimitSecs = isMock ? questions.length * MOCK_SECONDS_PER_QUESTION : null;
+  const isMock = utme || input.mode === QuizMode.MOCK;
+  const timeLimitSecs = utme
+    ? UTME_SECONDS
+    : isMock
+      ? questions.length * MOCK_SECONDS_PER_QUESTION
+      : null;
   const startedAt = new Date();
 
   const attempt = await prisma.quizAttempt.create({
@@ -628,7 +649,7 @@ export async function startAttempt(user: QuizUser, requested: StartAttemptInput)
       examId: input.examId ?? null,
       subjectId: subjectIds[0],
       subjectIds: subjectIds.length > 1 ? subjectIds : [],
-      mode: input.mode,
+      mode: isMock ? QuizMode.MOCK : input.mode,
       questionIds: questions.map((question) => question.id),
       totalQuestions: questions.length,
       timeLimitSecs,

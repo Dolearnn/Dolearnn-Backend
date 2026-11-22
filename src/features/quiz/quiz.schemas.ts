@@ -5,6 +5,14 @@ import { z } from 'zod';
 export const MAX_QUESTIONS_PER_ATTEMPT = 60;
 export const MAX_SUBJECTS_PER_ATTEMPT = 6;
 
+// A full JAMB UTME paper: Use of English plus three subjects, timed like the
+// real exam (60 English questions, 40 per other subject, 2 hours in all).
+export const UTME_ENGLISH_SLUG = 'use-of-english';
+export const UTME_ENGLISH_QUESTIONS = 60;
+export const UTME_SUBJECT_QUESTIONS = 40;
+export const UTME_SUBJECT_COUNT = 4;
+export const UTME_SECONDS = 2 * 60 * 60;
+
 export const startAttemptSchema = z.object({
   // One subject, or several in `subjectIds` for a mixed exam (e.g. JAMB: English
   // plus three subjects). Questions are shared evenly between the subjects.
@@ -23,10 +31,17 @@ export const startAttemptSchema = z.object({
   retakeOfAttemptId: z.string().trim().min(1).optional(),
   // Re-ask questions the learner got wrong on an earlier day.
   reviewMistakes: z.boolean().optional(),
+  // A full UTME paper. Needs English plus three subjects; question counts and
+  // time come from the UTME constants above, and it always runs in exam mode.
+  utme: z.boolean().optional(),
 })
   .refine((input) => input.subjectId || input.subjectIds?.length || input.retakeOfAttemptId || input.reviewMistakes, {
     message: 'Subject is required',
     path: ['subjectId'],
+  })
+  .refine((input) => !input.utme || subjectList(input).length === UTME_SUBJECT_COUNT, {
+    message: `A full UTME paper needs Use of English plus ${UTME_SUBJECT_COUNT - 1} subjects`,
+    path: ['subjectIds'],
   })
   .refine(
     (input) =>
