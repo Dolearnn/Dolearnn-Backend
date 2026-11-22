@@ -1,6 +1,10 @@
 # Question review: Yoruba and IRS (batch 6)
 
-These questions import as **drafts** (`draft: true` in their files), so students do not see them until a subject teacher checks them and an admin publishes them from **Admin > Question bank** (filter by subject and "Draft").
+These questions were published on 22 Nov 2026 **before** a subject teacher had checked them. A Yoruba teacher and an IRS teacher should still go through the items below. To correct a question, edit it in **Admin > Question bank**. To hide a whole batch again while it is checked:
+
+    npm run publish:bank -- batch-6-yoruba batch-6-irs --unpublish
+
+and run it without `--unpublish` to publish again.
 
 - Yoruba: 126 questions, `scripts/data/bank/subjects/batch-6-yoruba.js`
 - Islamic Religious Studies: 133 questions, `scripts/data/bank/subjects/batch-6-irs.js`

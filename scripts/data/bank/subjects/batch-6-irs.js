@@ -1,10 +1,9 @@
-// Batch 6: Islamic Religious Studies. Original questions, for teacher review (imported as drafts). Correct answer first; options are shuffled on import.
+// Batch 6: Islamic Religious Studies. Original questions. Correct answer first; options are shuffled on import.
 module.exports = {
   slug: 'irs',
   name: 'Islamic Religious Studies',
   sortOrder: 17,
   exams: ['waec', 'neco', 'jamb', 'post-utme'],
-  draft: true,
   topics: [
     { slug: 'quran-hadith', name: "Qur'an and Hadith" },
     { slug: 'tawhid-fiqh', name: 'Tawhid and Fiqh' },

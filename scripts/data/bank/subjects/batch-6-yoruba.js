@@ -1,10 +1,9 @@
-// Batch 6: Yoruba. Original questions, for teacher review (imported as drafts). Correct answer first; options are shuffled on import.
+// Batch 6: Yoruba. Original questions. Correct answer first; options are shuffled on import.
 module.exports = {
   slug: 'yoruba',
   name: 'Yoruba',
   sortOrder: 22,
   exams: ['waec', 'neco', 'jamb'],
-  draft: true,
   topics: [
     { slug: 'ede', name: 'Èdè (Language and Grammar)' },
     { slug: 'asa', name: 'Àṣà (Culture)' },
