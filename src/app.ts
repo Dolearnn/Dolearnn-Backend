@@ -58,7 +58,14 @@ export function createApp() {
       credentials: true,
     }),
   );
-  app.use(express.json());
+  // Keeps the exact bytes too, so Paystack's webhook signature can be checked.
+  app.use(
+    express.json({
+      verify: (req, _res, buffer) => {
+        (req as express.Request).rawBody = buffer;
+      },
+    }),
+  );
 
   app.get("/", (req,res)=>{
     res.json({

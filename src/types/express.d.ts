@@ -8,6 +8,8 @@ declare global {
         email: string;
         role: Role;
       };
+      // The unparsed JSON body (set in app.ts), for webhook signatures.
+      rawBody?: Buffer;
     } 
   }
 }

@@ -23,6 +23,7 @@ type FunnelRow = {
   first_quiz: bigint;
   came_back: bigint;
   tutor_requested: bigint;
+  paid: bigint;
 };
 
 const funnelCache = createTtlCache<FunnelReport>(FUNNEL_TTL_MS, FUNNEL_PERIODS.length);
@@ -31,9 +32,9 @@ export type FunnelReport = Awaited<ReturnType<typeof buildFunnelReport>>;
 
 /**
  * How learners who signed up in the last `days` moved through the product:
- * sign-up, plan set up, first quiz finished, came back on another day, asked for
- * a tutor. Each step counts people from the same sign-up group, so the steps
- * can be read as a funnel. Guest Daily players are reported beside it, as they
+ * sign-up, study plan set up, first quiz finished, came back on another day,
+ * paid for Pro, asked for a tutor. Each step counts people from the same sign-up
+ * group, so the steps can be read as a funnel. Guest Daily players are reported beside it, as they
  * have no account to follow.
  */
 async function buildFunnelReport(days: number) {
@@ -64,7 +65,8 @@ async function buildFunnelReport(days: number) {
         (SELECT COUNT(*) FROM "LearnerProfile" lp JOIN cohort c ON c."id" = lp."userId" WHERE lp."onboardingCompleted") AS onboarded,
         (SELECT COUNT(*) FROM practice) AS first_quiz,
         (SELECT COUNT(*) FROM practice WHERE days >= 2) AS came_back,
-        (SELECT COUNT(*) FROM tutor) AS tutor_requested
+        (SELECT COUNT(*) FROM tutor) AS tutor_requested,
+        (SELECT COUNT(DISTINCT pp."userId") FROM "PlanPurchase" pp JOIN cohort c ON c."id" = pp."userId" WHERE pp."status" = 'PAID') AS paid
     `),
     // A guest's entry moves onto their account when they sign up, so these are
     // guests who have not (yet) signed up.
@@ -80,9 +82,10 @@ async function buildFunnelReport(days: number) {
   const signedUp = count(row?.signed_up);
   const steps = [
     { key: 'signedUp', label: 'Signed up', count: signedUp },
-    { key: 'onboarded', label: 'Set up their plan', count: count(row?.onboarded) },
+    { key: 'onboarded', label: 'Set up their study plan', count: count(row?.onboarded) },
     { key: 'firstQuiz', label: 'Finished a first quiz', count: count(row?.first_quiz) },
     { key: 'cameBack', label: 'Practised on 2 or more days', count: count(row?.came_back) },
+    { key: 'paid', label: 'Paid for Pro', count: count(row?.paid) },
     { key: 'tutorRequested', label: 'Asked for a tutor', count: count(row?.tutor_requested) },
   ];
 

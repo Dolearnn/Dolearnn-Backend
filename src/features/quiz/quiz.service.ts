@@ -7,6 +7,7 @@ import {
   Role,
 } from '@prisma/client';
 import { AppError } from '../../lib/http';
+import { assertCanStartQuiz } from '../billing/billing.service';
 import { prisma } from '../../lib/prisma';
 import {
   getCatalogIndex,
@@ -535,6 +536,8 @@ async function startMistakesReview(user: QuizUser, input: StartAttemptInput) {
 }
 
 export async function startAttempt(user: QuizUser, requested: StartAttemptInput) {
+  // Free accounts: a few quizzes a day and one full UTME paper a month.
+  await assertCanStartQuiz(user, { utme: requested.utme === true && !requested.reviewMistakes });
   if (requested.reviewMistakes) return startMistakesReview(user, requested);
 
   const retake = requested.retakeOfAttemptId ? await retakePlan(user, requested) : null;
@@ -650,6 +653,7 @@ export async function startAttempt(user: QuizUser, requested: StartAttemptInput)
       subjectId: subjectIds[0],
       subjectIds: subjectIds.length > 1 ? subjectIds : [],
       mode: isMock ? QuizMode.MOCK : input.mode,
+      isUtme: utme,
       questionIds: questions.map((question) => question.id),
       totalQuestions: questions.length,
       timeLimitSecs,

@@ -121,6 +121,19 @@ enum PaymentGateway {
   OFFLINE
   STRIPE
   FLUTTERWAVE
+  PAYSTACK
+}
+
+// What a learner can buy for themselves (see src/features/billing/plans.ts).
+enum PlanProduct {
+  PRO_MONTH
+  EXAM_PASS
+}
+
+enum PlanPurchaseStatus {
+  PENDING
+  PAID
+  FAILED
 }
 
 enum PayoutStatus {
@@ -207,6 +220,7 @@ model User {
   topicStats      UserTopicStat[]
   arenaChallenges ArenaChallenge[]
   arenaEntries    ArenaEntry[]
+  planPurchases   PlanPurchase[]
 }
 
 // A self-directed learner account. This is separate from `Student`, which is
@@ -618,6 +632,35 @@ model Payment {
   @@index([parentId, createdAt])
 }
 
+// A Pro month or Exam Season Pass. Paid online through Paystack, or recorded by
+// an admin for a bank transfer or a lesson-centre sale. A paid purchase gives
+// Pro from startsAt to endsAt; a new one starts when the current one ends.
+model PlanPurchase {
+  id           String             @id @default(cuid())
+  userId       String
+  product      PlanProduct
+  // Naira charged (the founding price when it applied).
+  amount       Int
+  reference    String             @unique
+  status       PlanPurchaseStatus @default(PENDING)
+  gateway      PaymentGateway
+  // How Paystack took it: card, bank_transfer, ussd...
+  channel      String?
+  startsAt     DateTime?
+  endsAt       DateTime?
+  paidAt       DateTime?
+  // The admin who recorded an offline payment, and their note.
+  recordedById String?
+  note         String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status, endsAt])
+  @@index([status, paidAt])
+}
+
 model TeacherPayout {
   id        String       @id @default(cuid())
   teacherId String
@@ -794,6 +837,8 @@ model QuizAttempt {
   isReview          Boolean           @default(false)
   // The Daily's score: counted for streaks and XP, hidden from Practice history.
   isDaily           Boolean           @default(false)
+  // The full UTME paper (English 60 + 3 x 40). Free accounts get one a month.
+  isUtme            Boolean           @default(false)
   mode              QuizMode
   status            QuizAttemptStatus @default(IN_PROGRESS)
   // Ordered snapshot of the questions served, so grading never depends on the

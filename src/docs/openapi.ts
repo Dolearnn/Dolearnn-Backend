@@ -577,6 +577,50 @@ export const openApiSpec = swaggerJSDoc({
           responses: { 200: { description: 'Cancellation rejected' } },
         },
       },
+      '/api/billing/plans': {
+        get: { tags: ['Billing'], summary: 'Pro and Exam Season Pass prices today', responses: { 200: { description: 'Plans' } } },
+      },
+      '/api/billing/me': {
+        get: {
+          tags: ['Billing'],
+          summary: "The learner's plan, free-plan usage and payments",
+          security: [{ bearerAuth: [] }],
+          responses: { 200: { description: 'Plan status' } },
+        },
+      },
+      '/api/billing/checkout': {
+        post: {
+          tags: ['Billing'],
+          summary: 'Start a Paystack payment for PRO_MONTH or EXAM_PASS',
+          security: [{ bearerAuth: [] }],
+          responses: { 201: { description: 'Paystack page to open' }, 503: { description: 'Online payment not switched on' } },
+        },
+      },
+      '/api/billing/confirm': {
+        post: {
+          tags: ['Billing'],
+          summary: 'Check a payment with Paystack after the learner returns',
+          security: [{ bearerAuth: [] }],
+          responses: { 200: { description: 'Payment status' } },
+        },
+      },
+      '/api/billing/paystack/webhook': {
+        post: { tags: ['Billing'], summary: 'Paystack webhook (signed with the secret key)', responses: { 200: { description: 'Received' } } },
+      },
+      '/api/admin/plans/purchases': {
+        get: {
+          tags: ['Admin Payments'],
+          summary: 'Paid Pro and Exam Season Pass purchases, with totals',
+          security: [{ bearerAuth: [] }],
+          responses: { 200: { description: 'Purchases' } },
+        },
+        post: {
+          tags: ['Admin Payments'],
+          summary: 'Record a bank transfer or lesson-centre sale (switches Pro on)',
+          security: [{ bearerAuth: [] }],
+          responses: { 201: { description: 'Purchase recorded' } },
+        },
+      },
       '/api/admin/payments': {
         get: {
           tags: ['Admin Payments'],

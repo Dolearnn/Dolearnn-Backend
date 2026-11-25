@@ -17,3 +17,8 @@ export function sessionPrice() {
 export function defaultTutorPay() {
   return Math.round(env.TUTORING_SESSION_PRICE * DEFAULT_TUTOR_SHARE);
 }
+
+/** "₦12,000", for messages and emails. */
+export function naira(amount: number) {
+  return `₦${Math.round(amount).toLocaleString('en-NG')}`;
+}

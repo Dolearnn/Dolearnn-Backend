@@ -58,6 +58,10 @@ const envSchema = z.object({
   // What a learner pays for one tutoring session, in naira. Tutors are paid
   // their own per-session rate (by default 50% of this).
   TUTORING_SESSION_PRICE: z.coerce.number().positive().default(10000),
+  // Paystack secret key (sk_test_... or sk_live_...). Online payment for Pro
+  // and the Exam Season Pass stays off until it is set.
+  PAYSTACK_SECRET_KEY: optionalNonEmptyString,
+  PAYSTACK_BASE_URL: z.string().url().default('https://api.paystack.co'),
   // AI features stay switched off until a key is set.
   ANTHROPIC_API_KEY: optionalNonEmptyString,
   // Which Claude model writes explanations and quiz diagnoses. Both are
